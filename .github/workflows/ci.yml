@@ -51,7 +51,7 @@ jobs:
       - name: Install
         run: |
           python -m pip install -U pip
-          python -m pip install -e '.[dev]' pyyaml
+          python -m pip install -e '.[dev]'
       - name: Synthetic experiment smoke run
         run: python experiments/synthetic_frontier.py --seeds 2 --steps 60 --workers 2 --output /tmp/smoke.json
       - name: Config dry-run
