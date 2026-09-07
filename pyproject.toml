@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pace-rl"
+version = "0.1.0"
+description = "PaCE: group-relative RL that trains one policy to cover a Pareto frontier"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = ["numpy>=1.24"]
+
+[project.optional-dependencies]
+llm = ["torch>=2.2", "transformers>=4.44", "peft>=0.11", "datasets>=2.19", "pyyaml>=6.0"]
+dev = ["pytest>=7.4", "black==25.1.0"]
+
+[tool.setuptools.packages.find]
+include = ["pace*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.black]
+# Pinned here rather than left to whatever black the runner installs: black's output
+# changes between releases, so an unpinned formatter turns the lint job into a
+# time-bomb that fails on an unrelated PR months from now. The version is pinned in
+# the dev extra to match.
+line-length = 120
+target-version = ["py310"]

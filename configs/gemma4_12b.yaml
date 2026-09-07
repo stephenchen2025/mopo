@@ -1,0 +1,58 @@
+# PaCE on Gemma 4 12B -- the headline config.
+#
+# 12B with LoRA fits a single 80GB node. Run the ablations on E4B and only bring the
+# settled configuration here -- at this size a full ablation sweep is not affordable, and
+# a headline number from an unablated configuration is not worth much.
+#
+# Status: not executed. No GPU was available where this was developed.
+
+model_name: google/gemma-4-12b-it
+objectives: [accuracy, brevity, format]
+
+# Rollouts per prompt = distinct directions per group. Below ~6 the cross-direction
+# advantage matrix gets thin and the frontier signal degrades; 8 is the floor worth using.
+group_size: 8
+prompts_per_step: 4
+steps: 2000
+
+lr: 1.0e-6
+kl_coef: 0.02
+clip_range: 0.2
+max_new_tokens: 512
+temperature: 1.0
+target_tokens: 256
+grad_accum: 1
+max_grad_norm: 1.0
+
+use_lora: true
+lora_r: 64
+lora_alpha: 128
+lora_dropout: 0.05
+
+pace:
+  scalarization: smooth_tchebycheff
+  mu: 0.1
+  rho: 0.05
+  rank_blend: 0.0
+  lambda_front: 0.3
+  lambda_crowd: 1.0
+  loo_shrinkage: 0.0
+  advantage_clip: 5.0
+  # 3 objectives at 8 partitions = 45 grid directions, comfortably above group_size = 8.
+  # The coverage bandit is inert when the grid is close to the group size, since a group
+  # then covers most of the grid no matter what the bandit prefers.
+  n_partitions: 8
+  bandit:
+    weakness: 1.0
+    improvement: 1.0
+    ucb_c: 0.5
+    temperature: 0.5
+    epsilon: 0.15
+    ema: 0.85
+    jitter: 50.0
+    unique_per_group: true
+
+seed: 0
+log_every: 10
+eval_every: 100
+eval_partitions: 8

@@ -1,0 +1,59 @@
+# PaCE on Muse Glimmer 30B (Meta, Apache 2.0) -- optional external-validity check.
+#
+# Why this model and not Muse Spark: Spark is API-only. Policy-gradient RL needs per-token
+# log-probabilities and a gradient path through the policy, and an inference API provides
+# neither -- there is no version of GRPO you can run against it. Glimmer is the trainable
+# Muse-family model, and its Apache 2.0 license leaves no asterisk on released checkpoints.
+#
+# 30B dense makes every rollout expensive, and PaCE is rollout-hungry by construction, so
+# this is a confirmation run after the method is settled on Gemma -- not a place to iterate.
+# Its agent tuning does make it the better choice if you extend the objective set toward
+# tool-use trade-offs (accuracy vs. latency vs. tool-call cost), where the tension is real.
+#
+# Status: not executed.
+
+model_name: meta-models/Muse-Glimmer-30B
+objectives: [accuracy, brevity, format]
+
+group_size: 8
+prompts_per_step: 2   # halved: 30B dense rollouts are the bottleneck
+steps: 1500
+
+lr: 5.0e-7
+kl_coef: 0.02
+clip_range: 0.2
+max_new_tokens: 512
+temperature: 1.0
+target_tokens: 256
+grad_accum: 2
+max_grad_norm: 1.0
+
+use_lora: true
+lora_r: 32
+lora_alpha: 64
+lora_dropout: 0.05
+
+pace:
+  scalarization: smooth_tchebycheff
+  mu: 0.1
+  rho: 0.05
+  rank_blend: 0.0
+  lambda_front: 0.3
+  lambda_crowd: 1.0
+  loo_shrinkage: 0.0
+  advantage_clip: 5.0
+  n_partitions: 8
+  bandit:
+    weakness: 1.0
+    improvement: 1.0
+    ucb_c: 0.5
+    temperature: 0.5
+    epsilon: 0.15
+    ema: 0.85
+    jitter: 50.0
+    unique_per_group: true
+
+seed: 0
+log_every: 10
+eval_every: 100
+eval_partitions: 8
