@@ -62,6 +62,23 @@ weighted sum — tops the table at 97.8% of baseline. This is the second indepen
 where a simple conditioned baseline beats PaCE's machinery; the first was three objectives
 in the synthetic environment ([`M3_RESULTS.md`](M3_RESULTS.md)).
 
+## Correction: an evaluation bug inflated the spread in these numbers
+
+Found while building the follow-up experiment. `evaluate()` created a seeded generator and
+then never used it, drawing its problems from `task.sample()` instead — the task's own RNG,
+which advances through pretraining and through every RL step. **Every method and every seed
+was therefore scored on a different set of problems.**
+
+This adds noise rather than a systematic bias toward any method, so the ordering above is
+not overturned by it, but the `±` figures are inflated and small differences between methods
+deserve even less weight than the standard errors suggest. It is fixed in
+`experiments/tiny_lm_rl.py`; evaluation problems now come from a locally seeded generator and
+are identical for every policy.
+
+The severity is easier to see in the follow-up experiment, where the same bug made a ceiling
+reference score 0.3600 against 0.5948 for the identical configuration measured on a fresh
+task — enough to invert the sign of a headroom measurement.
+
 ## Two harness bugs found on the way, one of which invalidated a whole run
 
 **A missing KL anchor.** The first version of this experiment used a bare REINFORCE loss

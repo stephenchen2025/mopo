@@ -92,9 +92,23 @@ def token_logprobs(model, torch, tok, prompt_ids, completion_ids, grad: bool):
 
 
 def evaluate(model, tok, torch, task, dirs, n_problems, max_new_tokens, seed=0):
-    """Greedy decode per direction; returns the achieved reward vector for each."""
+    """Greedy decode per direction; returns the achieved reward vector for each.
+
+    Evaluation problems come from a locally seeded generator, NOT from ``task.sample()``.
+    That distinction is the whole point: the task's own RNG advances through pretraining and
+    through every RL step, so drawing eval problems from it hands each policy a *different*
+    exam, and comparisons then mix real differences with problem-set luck.
+
+    This was a real bug. It made the ceiling reference -- evaluated after 500 steps of
+    pretraining had already consumed the task RNG -- score 0.3600 where the identical
+    configuration on a fresh task scored 0.5948. That inverted the measured headroom to
+    negative and would have sunk the experiment. It also inflated the seed-to-seed spread in
+    the earlier tiny-LM run, where every method and every seed drew its own eval set.
+    """
     rng = np.random.default_rng(seed)
-    problems = [task.sample() for _ in range(n_problems)]
+    problems = [
+        (int(rng.integers(task.lo, task.hi + 1)), int(rng.integers(task.lo, task.hi + 1))) for _ in range(n_problems)
+    ]
     rows = []
     for w in dirs:
         texts, lens, golds = [], [], []
@@ -211,6 +225,44 @@ def main() -> None:
     ap.add_argument("--seeds", type=int, default=3)
     ap.add_argument("--steps", type=int, default=250)
     ap.add_argument("--pretrain-steps", type=int, default=500)
+    ap.add_argument("--n-digits", type=int, default=2)
+    ap.add_argument(
+        "--start-floor",
+        type=float,
+        default=0.15,
+        help="Worked-style probability at the brevity end of the START policy.",
+    )
+    ap.add_argument(
+        "--start-span",
+        type=float,
+        default=0.70,
+        help="How much the marker shifts that probability. Small values leave the "
+        "start policy weakly conditioned, so RL must LEARN the routing.",
+    )
+    ap.add_argument(
+        "--ceiling-floor",
+        type=float,
+        default=0.15,
+    )
+    ap.add_argument(
+        "--ceiling-span",
+        type=float,
+        default=0.70,
+        help="Conditioning strength of the ceiling reference. Do not push this to the "
+        "extreme: teacher-forced loss is token-weighted and the worked style carries ~73% "
+        "of all tokens, so an over-strong setting lets the model minimize loss by always "
+        "emitting worked and ignoring the marker -- which produces a ceiling with "
+        "near-zero controllability and no usable target.",
+    )
+    ap.add_argument(
+        "--ceiling-steps",
+        type=int,
+        default=0,
+        help="If >0, train a strongly-conditioned reference policy too and report "
+        "each method as the fraction of the (ceiling - start) gap it closes. "
+        "Without it, results read only relative to the start policy, hiding "
+        "whether headroom existed -- the flaw in the first tiny-LM run.",
+    )
     ap.add_argument("--group", type=int, default=8)
     ap.add_argument("--prompts-per-step", type=int, default=2)
     ap.add_argument("--lr", type=float, default=1e-4)
@@ -231,22 +283,74 @@ def main() -> None:
     torch.set_num_threads(4)
     torch.manual_seed(0)
     tok = CharTokenizer()
-    task = ArithmeticTask(seed=0)
+    task = ArithmeticTask(n_digits=args.n_digits, seed=0)
+    dirs = das_dennis(2, args.eval_partitions)
 
     print(f"[1/3] pretraining {args.pretrain_steps} steps into the frontier window", flush=True)
     t0 = time.time()
     model = build_tiny_qwen(tok, hidden=args.hidden, layers=args.layers)
-    pretrain(model, tok, task, steps=args.pretrain_steps, batch_size=48, lr=3e-3, log_every=250)
+    pretrain(
+        model,
+        tok,
+        task,
+        steps=args.pretrain_steps,
+        batch_size=48,
+        lr=3e-3,
+        log_every=250,
+        floor=args.start_floor,
+        span=args.start_span,
+    )
     base_state = {k: v.clone() for k, v in model.state_dict().items()}
     print(f"      done in {(time.time()-t0)/60:.1f} min", flush=True)
 
+    ceiling_hv = None
+    if args.ceiling_steps > 0:
+        print(
+            f"[1b] CEILING reference: {args.ceiling_steps} steps, strong conditioning -- "
+            f"what this architecture reaches by supervision alone",
+            flush=True,
+        )
+        t1 = time.time()
+        ceil_model = build_tiny_qwen(tok, hidden=args.hidden, layers=args.layers)
+        pretrain(
+            ceil_model,
+            tok,
+            task,
+            steps=args.ceiling_steps,
+            batch_size=48,
+            lr=3e-3,
+            log_every=1000,
+            floor=0.02,
+            span=0.96,
+        )
+        Fc = evaluate(ceil_model, tok, torch, task, dirs, args.eval_problems, args.max_new_tokens)
+        sc = frontier_summary(Fc, np.zeros(2), dirs)
+        ceiling_hv = sc["hypervolume"]
+        print(
+            f"      ceiling HV {ceiling_hv:.4f}  ctrl {sc['controllability_mean']:+.3f} "
+            f"({(time.time() - t1) / 60:.1f} min)",
+            flush=True,
+        )
+        del ceil_model
+
     print("[2/3] frontier check on the pretrained policy", flush=True)
-    dirs = das_dennis(2, args.eval_partitions)
     F0 = evaluate(model, tok, torch, task, dirs, args.eval_problems, args.max_new_tokens)
     s0 = frontier_summary(F0, np.zeros(2), dirs)
     for w, r in zip(dirs, F0):
         print(f"      w_acc={w[0]:.2f} -> accuracy {r[0]:.3f}  brevity {r[1]:.3f}", flush=True)
     print(f"      controllability {s0['controllability_mean']:+.3f}  HV {s0['hypervolume']:.4f}", flush=True)
+    if ceiling_hv is not None:
+        gap = ceiling_hv - s0["hypervolume"]
+        print(
+            f"      HEADROOM: ceiling {ceiling_hv:.4f} - start " f"{s0['hypervolume']:.4f} = {gap:+.4f}",
+            flush=True,
+        )
+        if gap <= 0.02:
+            print(
+                "      WARNING: almost no headroom. RL can only preserve or damage this "
+                "frontier, so the comparison will not test frontier discovery.",
+                flush=True,
+            )
     if s0["controllability_mean"] < 0.2:
         print(
             "      WARNING: pretrained policy barely responds to the marker; RL starts "
@@ -272,7 +376,12 @@ def main() -> None:
     }
 
     print(f"[3/3] RL: {len(methods)} methods x {args.seeds} seeds x {args.steps} steps", flush=True)
-    results = {"config": vars(args), "pretrained": {"frontier": F0.tolist(), **s0}, "methods": {}}
+    results = {
+        "config": vars(args),
+        "pretrained": {"frontier": F0.tolist(), **s0},
+        "ceiling_hypervolume": ceiling_hv,
+        "methods": {},
+    }
     for name, spec in methods.items():
         runs = []
         for seed in range(args.seeds):
@@ -289,10 +398,14 @@ def main() -> None:
         for k in ("hypervolume", "controllability_mean", "spacing", "max_spread"):
             v = np.array([r[k] for r in runs], dtype=float)
             agg[k], agg[k + "_std"] = float(v.mean()), float(v.std())
+        if ceiling_hv is not None:
+            gap = ceiling_hv - s0["hypervolume"]
+            agg["gap_closed"] = float((agg["hypervolume"] - s0["hypervolume"]) / gap) if gap > 1e-9 else float("nan")
         results["methods"][name] = agg
+        extra = f" gap_closed={agg['gap_closed']:+.1%}" if "gap_closed" in agg else ""
         print(
             f"      -> {name:18s} HV={agg['hypervolume']:.4f} +-{agg['hypervolume_std']:.4f} "
-            f"ctrl={agg['controllability_mean']:+.3f}",
+            f"ctrl={agg['controllability_mean']:+.3f}{extra}",
             flush=True,
         )
 

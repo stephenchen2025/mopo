@@ -124,16 +124,25 @@ class CharTokenizer:
 
 @dataclass
 class ArithmeticTask:
-    """Two-digit addition, rendered in a long ("worked") or short ("direct") style."""
+    """Multi-digit addition, rendered in a long ("worked") or short ("direct") style."""
 
-    max_operand: int = 99
+    n_digits: int = 2
+    """Operand width. Three digits makes the task genuinely hard for a model this size:
+    more carries to track, and a direct answer needs a far larger table memorized. That
+    leaves accuracy headroom at every point on the frontier, which the two-digit version
+    does not -- there the pretrained policy already reaches 1.000 accuracy at the accuracy
+    end, so RL has nothing left to find and can only preserve or damage what pretraining
+    built. See results/TINY_LM_RESULTS.md for why that made the first run a poor test."""
+
     seed: int = 0
 
     def __post_init__(self) -> None:
         self.rng = np.random.default_rng(self.seed)
+        self.lo = 10 ** (self.n_digits - 1)
+        self.hi = 10**self.n_digits - 1
 
     def sample(self) -> tuple[int, int]:
-        return int(self.rng.integers(10, self.max_operand + 1)), int(self.rng.integers(10, self.max_operand + 1))
+        return int(self.rng.integers(self.lo, self.hi + 1)), int(self.rng.integers(self.lo, self.hi + 1))
 
     @staticmethod
     def marker_for(w_accuracy: float) -> str:
@@ -148,11 +157,21 @@ class ArithmeticTask:
 
     @staticmethod
     def worked(a: int, b: int) -> str:
-        """Digit-by-digit with an explicit carry, then the answer after '#'."""
-        ones = a % 10 + b % 10
-        carry = ones // 10
-        tens = a // 10 + b // 10 + carry
-        return f"{a % 10}+{b % 10}={ones};c{carry};{a // 10}+{b // 10}+{carry}={tens};#{a + b}"
+        """Column addition right to left with explicit carries, then the answer after '#'.
+
+        Generalized over operand width, so the number of reasoning steps grows with the
+        digits and the accuracy/brevity trade-off sharpens as the task gets harder.
+        """
+        da, db = str(a)[::-1], str(b)[::-1]
+        parts, carry = [], 0
+        for i in range(max(len(da), len(db))):
+            x = int(da[i]) if i < len(da) else 0
+            y = int(db[i]) if i < len(db) else 0
+            total = x + y + carry
+            parts.append(f"{x}+{y}+{carry}={total}" if carry else f"{x}+{y}={total}")
+            carry = total // 10
+            parts.append(f"c{carry}")
+        return ";".join(parts) + f";#{a + b}"
 
     @staticmethod
     def direct(a: int, b: int) -> str:
@@ -243,7 +262,18 @@ def build_tiny_qwen(tokenizer: CharTokenizer, hidden: int = 256, layers: int = 6
     return model
 
 
-def pretrain(model, tokenizer, task, steps=3000, batch_size=64, lr=3e-3, seq_len=48, log_every=500):
+def pretrain(
+    model,
+    tokenizer,
+    task,
+    steps=3000,
+    batch_size=64,
+    lr=3e-3,
+    seq_len=64,
+    log_every=500,
+    floor=0.15,
+    span=0.70,
+):
     """Teacher-forced pretraining so RL starts from a policy with something to shape.
 
     Without this the model emits noise, every accuracy reward is 0, and the RL run measures
@@ -257,7 +287,7 @@ def pretrain(model, tokenizer, task, steps=3000, batch_size=64, lr=3e-3, seq_len
     model.train()
     losses = []
     for step in range(steps):
-        rows = task.corpus(batch_size)
+        rows = task.corpus(batch_size, floor=floor, span=span)
         seqs = [tokenizer.encode(r)[:seq_len] for r in rows]
         width = max(len(s) for s in seqs)
         ids = torch.tensor([s + [tokenizer.pad_token_id] * (width - len(s)) for s in seqs])
