@@ -15,7 +15,9 @@ import numpy as np
 
 __all__ = [
     "OBJECTIVE_PRESETS",
+    "OBJECTIVE_PHRASES",
     "format_preference",
+    "verbalize_preference",
     "parse_preference",
     "build_prompt",
 ]
@@ -62,11 +64,7 @@ def parse_preference(text: str, names: tuple[str, ...]) -> np.ndarray | None:
     return w / total if total > 0 else None
 
 
-DEFAULT_SYSTEM = (
-    "You are a careful assistant. The <preference> line states how the user weights each "
-    "objective for this request; weights sum to 1. Satisfy the high-weight objectives "
-    "first, and trade away the low-weight ones as needed."
-)
+DEFAULT_SYSTEM = "You are a careful assistant. Follow the instructions below exactly."
 
 
 def build_prompt(
@@ -74,9 +72,104 @@ def build_prompt(
     w: np.ndarray,
     names: tuple[str, ...],
     system: str = DEFAULT_SYSTEM,
+    style: str = "verbal",
 ) -> list[dict[str, str]]:
-    """Build a chat-format prompt carrying the preference direction."""
+    """Build a chat-format prompt carrying the preference direction.
+
+    Args:
+        style: ``"verbal"`` (default) renders the direction as instructions, which is the
+            only form measured to steer a real instruct model -- see
+            :func:`verbalize_preference`. ``"numeric"`` emits the weight vector and is kept
+            for ablations and for models fine-tuned to read it.
+    """
+    if style == "verbal":
+        control = verbalize_preference(w, names)
+    elif style == "numeric":
+        control = format_preference(w, names)
+    else:
+        raise ValueError(f"unknown conditioning style: {style!r}")
     return [
-        {"role": "system", "content": f"{system}\n{format_preference(w, names)}"},
+        {"role": "system", "content": f"{system}\n{control}"},
         {"role": "user", "content": question},
     ]
+
+
+# --------------------------------------------------------------------------------------
+# Verbalized conditioning
+# --------------------------------------------------------------------------------------
+
+OBJECTIVE_PHRASES: dict[str, tuple[str, str, str]] = {
+    # objective -> (high weight, medium weight, low weight)
+    "accuracy": (
+        "Work through the problem step by step and check your arithmetic before answering.",
+        "Show the key steps of your reasoning.",
+        "Do not spend effort explaining your reasoning.",
+    ),
+    "brevity": (
+        "Answer with the result only. No working, no explanation, no preamble.",
+        "Keep the answer short.",
+        "Length is not a concern; be as thorough as you like.",
+    ),
+    "format": (
+        "Follow the requested output format exactly.",
+        "Use the requested output format.",
+        "The output format is not important.",
+    ),
+    "helpfulness": (
+        "Be as genuinely useful as possible, anticipating what the user needs next.",
+        "Be helpful.",
+        "Do not elaborate beyond what was asked.",
+    ),
+    "harmlessness": (
+        "Refuse anything unsafe and add caveats wherever there is any risk.",
+        "Note any relevant safety caveats.",
+        "Safety caveats are not needed here.",
+    ),
+}
+
+
+def verbalize_preference(w: np.ndarray, names: tuple[str, ...]) -> str:
+    """Render a direction as natural-language instructions rather than numeric weights.
+
+    **This is the conditioning format that actually works, and the difference is not
+    marginal.** Measured zero-shot on Qwen3-0.6B over two-digit multiplication, the numeric
+    form (``<preference>accuracy=1.00 brevity=0.00</preference>``) produced *identical*
+    behaviour at every point on the simplex -- 8 words and rank correlation +0.000 between
+    requested weight and achieved reward. The same model swung from 3 words to 68, and from
+    0.50 to 0.75 accuracy, in response to plain instructions ("answer with the number only"
+    vs "show every step of your working").
+
+    So the model was never the problem; the encoding was. An instruction-tuned model has
+    seen a great deal of text telling it how to behave and essentially none pairing a
+    decimal weight vector with a behaviour.
+
+    This matters most at the *start* of RL. PaCE's cross-direction advantage matrix needs
+    the rollouts in a group to actually differ by direction; if the policy ignores ``w`` at
+    initialization, that matrix is rank-one and the mechanism has nothing to bootstrap
+    from (``tests/test_advantages.py`` asserts that degenerate case directly). Numeric
+    conditioning could in principle be *learned* from the reward, but it starts from no
+    signal at all, which is a far worse place to begin.
+
+    Weights are bucketed into three bands rather than mapped continuously: the phrasing is
+    what the model responds to, and interpolating text does not produce interpolated
+    behaviour. Frontier resolution comes from *which* objectives are emphasized, not from
+    fine gradations in how emphatically.
+    """
+    w = np.asarray(w, dtype=float)
+    if w.shape[0] != len(names):
+        raise ValueError(f"got {w.shape[0]} weights for {len(names)} objectives")
+    lines = []
+    for weight, name in zip(w, names):
+        phrases = OBJECTIVE_PHRASES.get(name)
+        if phrases is None:
+            lines.append(f"Weight on {name}: {'high' if weight >= 0.5 else 'low'}.")
+            continue
+        # Bands are relative to a uniform direction (1/m), not to an absolute 0.5.
+        # With an absolute threshold and m=2, the balanced direction w=(0.5, 0.5) lands in
+        # the "high" band for *both* objectives and emits contradictory instructions
+        # ("work through it step by step" alongside "answer with the result only"), which
+        # is worse than no conditioning at all.
+        uniform = 1.0 / len(names)
+        band = 0 if weight >= 1.5 * uniform else (1 if weight >= 0.5 * uniform else 2)
+        lines.append(phrases[band])
+    return " ".join(lines)

@@ -86,9 +86,19 @@ def test_parse_preference_renormalizes_and_handles_junk():
 
 
 def test_build_prompt_carries_the_direction():
-    msgs = build_prompt("2+2?", np.array([0.6, 0.4]), ("accuracy", "brevity"))
+    """The default is now verbal conditioning, which is what steers a real model.
+
+    Numeric weights measured +0.000 controllability zero-shot on Qwen3-0.6B against +0.860
+    for the verbal form, so the numeric round-trip is asserted through the explicit
+    ``style="numeric"`` path rather than through the default.
+    """
+    names = ("accuracy", "brevity")
+    msgs = build_prompt("2+2?", np.array([0.6, 0.4]), names)
     assert msgs[0]["role"] == "system" and msgs[1]["content"] == "2+2?"
-    assert parse_preference(msgs[0]["content"], ("accuracy", "brevity")) is not None
+    assert parse_preference(msgs[0]["content"], names) is None  # verbal, not numeric
+
+    numeric = build_prompt("2+2?", np.array([0.6, 0.4]), names, style="numeric")
+    np.testing.assert_allclose(parse_preference(numeric[0]["content"], names), [0.6, 0.4], atol=1e-6)
 
 
 def test_every_shipped_config_parses():
@@ -119,3 +129,68 @@ def test_every_shipped_config_parses():
             f"({cfg.group_size}) or the coverage bandit is inert -- a group sampled "
             f"without replacement would cover most of the grid regardless of its choices"
         )
+
+
+def test_extract_answer_handles_marker_first_completions():
+    """Regression guard for a bug found by generating from a real model.
+
+    Qwen3-0.6B answers `What is 37+58?` with `#### 37 + 58 = 95`: marker first, answer
+    last. Capturing the number straight after `####` returns 37, so a fully correct
+    completion scores zero accuracy -- and nothing in a training curve would reveal it,
+    the accuracy objective would simply look impossible.
+    """
+    assert extract_answer("#### 37 + 58 = 95") == "95"
+    assert accuracy_reward("#### 37 + 58 = 95", "95") == 1.0
+    # The GSM8K convention (marker last) must keep working.
+    assert extract_answer("some reasoning here\n#### 95") == "95"
+    assert accuracy_reward("lots of working\n#### 95", "95") == 1.0
+    # A boxed answer still wins over any marker.
+    assert extract_answer(r"#### 37 + 58 = \boxed{95}") == "95"
+    # Multiple markers: the last one governs.
+    assert extract_answer("#### 12 first try\n#### 5 + 90 = 95") == "95"
+
+
+def test_verbalized_conditioning_is_coherent_across_the_simplex():
+    """Guards the banding fix in verbalize_preference.
+
+    Bands are relative to a uniform direction, not an absolute 0.5. With an absolute
+    threshold and m=2 the balanced direction lands in the "high" band for *both*
+    objectives and emits contradictory instructions, which is worse than no conditioning.
+    """
+    import numpy as np
+
+    from pace.llm.conditioning import OBJECTIVE_PHRASES, verbalize_preference
+
+    names = ("accuracy", "brevity")
+    acc_high, _, acc_low = OBJECTIVE_PHRASES["accuracy"]
+    brev_high, _, brev_low = OBJECTIVE_PHRASES["brevity"]
+
+    extreme_acc = verbalize_preference(np.array([1.0, 0.0]), names)
+    assert acc_high in extreme_acc and brev_low in extreme_acc
+
+    extreme_brev = verbalize_preference(np.array([0.0, 1.0]), names)
+    assert brev_high in extreme_brev and acc_low in extreme_brev
+
+    balanced = verbalize_preference(np.array([0.5, 0.5]), names)
+    assert (
+        acc_high not in balanced and brev_high not in balanced
+    ), "a balanced direction must not demand both extremes at once"
+
+    # Three objectives: a uniform direction is balanced on all of them.
+    names3 = ("accuracy", "brevity", "format")
+    uniform = verbalize_preference(np.array([1 / 3, 1 / 3, 1 / 3]), names3)
+    for obj in names3:
+        assert OBJECTIVE_PHRASES[obj][0] not in uniform
+
+
+def test_build_prompt_supports_both_conditioning_styles():
+    import numpy as np
+
+    from pace.llm.conditioning import build_prompt
+
+    w, names = np.array([0.7, 0.3]), ("accuracy", "brevity")
+    verbal = build_prompt("2+2?", w, names)[0]["content"]
+    numeric = build_prompt("2+2?", w, names, style="numeric")[0]["content"]
+    assert "<preference>" not in verbal and "<preference>" in numeric
+    with pytest.raises(ValueError, match="unknown conditioning style"):
+        build_prompt("2+2?", w, names, style="telepathy")

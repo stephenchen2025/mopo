@@ -307,11 +307,23 @@ algorithm is Gemma-specific.
 
 Two mechanisms, in increasing order of strength and invasiveness:
 
-1. **Prompt conditioning (default, implemented).** A control line in the system turn:
-   `<preference>accuracy=0.70 brevity=0.30</preference>`. Zero architecture change, works with any
-   chat model, and the policy learns to read it because the reward depends on it. Weakness: the
-   model can learn to ignore it, and nothing structurally prevents that — which is exactly why the
-   **controllability metric** (§6) is a first-class part of the evaluation and not an afterthought.
+1. **Prompt conditioning (default, implemented) — but verbal, not numeric.** A control line in
+   the system turn. Zero architecture change, works with any chat model.
+
+   **Measured on Qwen3-0.6B, the numeric form does not work at all.**
+   `<preference>accuracy=0.70 brevity=0.30</preference>` produced *identical* behaviour at every
+   point on the simplex: controllability **+0.000**. Rendering the same weights as instructions
+   ("Answer with the result only." / "Work through the problem step by step.") gives
+   **+0.860**. The model is highly steerable — plain instructions swing it from 3 words to 68 —
+   so the encoding was the problem, not the model. An instruction-tuned model has seen a great
+   deal of text telling it how to behave and essentially none pairing a decimal weight vector
+   with a behaviour. Full numbers in [`results/REAL_MODEL_CONDITIONING.md`](results/REAL_MODEL_CONDITIONING.md).
+
+   This bites PaCE specifically: the cross-direction advantage matrix needs the group's rollouts
+   to differ by direction, so a policy that ignores `w` at initialization makes `S` rank-one and
+   leaves the mechanism nothing to bootstrap from. Such a run would not crash — it would train,
+   look healthy, and report a "frontier" that was one repeated behaviour. This is exactly why the
+   **controllability metric** (§6) is first-class and not an afterthought.
 2. **Conditioned LoRA (planned).** `w` modulates the LoRA update — Panacea's SVD-LoRA embeds the
    preference vector into the singular values of the adapter. Structural, so it cannot be ignored,
    at the cost of a custom adapter.

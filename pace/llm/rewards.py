@@ -31,11 +31,31 @@ _LAST_NUMBER = re.compile(r"(-?[\d,]*\.?\d+)")
 
 
 def extract_answer(text: str) -> str | None:
-    """Pull a final answer out of a completion, preferring explicit delimiters."""
-    for pattern in (_BOXED, _HASHES):
-        matches = pattern.findall(text)
-        if matches:
-            return matches[-1].strip().replace(",", "")
+    """Pull a final answer out of a completion, preferring explicit delimiters.
+
+    The ``####`` marker needs care. The GSM8K convention puts it *last*
+    (``reasoning...\n#### 95``), but instruction-tuned models routinely put it first and
+    the answer at the end (``#### 37 + 58 = 95``). Capturing the number that immediately
+    follows the marker gets the first operand in that second case -- so a completion that
+    is entirely correct scores zero on accuracy.
+
+    That failure is invisible in training curves: the accuracy objective just looks
+    stubbornly hard. It was caught by generating from a real model and noticing that
+    ``#### 37 + 58 = 95`` scored 0 against a gold answer of 95.
+
+    So: after the last marker, take the *last* number, which is right under both
+    conventions.
+    """
+    boxed = _BOXED.findall(text)
+    if boxed:
+        return boxed[-1].strip().replace(",", "")
+
+    marker = text.rfind("####")
+    if marker != -1:
+        tail = _LAST_NUMBER.findall(text[marker + 4 :])
+        if tail:
+            return tail[-1].strip().replace(",", "")
+
     matches = _LAST_NUMBER.findall(text)
     return matches[-1].strip().replace(",", "") if matches else None
 
