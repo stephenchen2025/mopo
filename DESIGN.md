@@ -76,16 +76,26 @@ The cost is real and deliberate: ranks discard magnitude *within* a group, so "b
 and "emphatically correct" look the same. `rank_blend ∈ [0,1]` mixes rank with min-max scaling
 if you want some magnitude back.
 
-**An interaction worth knowing about, found by measuring rather than by design.** Rank
-normalization maps any monotone two-objective front onto evenly spaced ranks, which means a
-*concave* front becomes exactly linear in rank space. So ranks already remove the weighted sum's
-pull toward the extremes — but they replace it with a different problem: under a balanced weight
-every point then ties exactly, and a weighted sum is perfectly *indifferent*, supplying no signal
-about which trade-off to select. Tchebycheff breaks that tie strictly in favour of the balanced
-point. The two mechanisms are therefore not redundant and neither is sufficient alone: without
-ranks you get collapse to an extreme, without Tchebycheff you get an undirected drift. The drift
-is visible in the experiments as `pace_linear` having the widest seed-to-seed spread of any
-variant. Asserted in `tests/test_scalarization.py`.
+**An interaction worth knowing about, found by measuring rather than by design — and it is
+specific to two objectives.** With `m = 2` on a monotone front, the ranks of objective 0 are a
+permutation of the uniform grid and the ranks of objective 1 are exactly its reverse, so
+`u_0 + u_1 = 1` identically: a *concave* front becomes exactly linear in rank space. Ranks
+therefore already remove the weighted sum's pull toward the extremes — but they replace it with a
+different problem: under a balanced weight every point then ties exactly, a weighted sum is
+perfectly *indifferent*, and it supplies no signal about which trade-off to select. Tchebycheff
+breaks that tie strictly in favour of the balanced point. Neither mechanism is sufficient alone:
+without ranks you get collapse to an extreme, without Tchebycheff an undirected drift — visible in
+the experiments as `pace_linear` having the widest seed-to-seed spread of any variant.
+
+**None of that generalizes past `m = 2`.** Three rank permutations are not forced to be mutually
+reversed, so at `m >= 3` the rank vectors are not co-planar (measured spread of `sum_j u_j` on a
+concave 3-objective front: 1.22 to 1.67, against a constant 1.0 at `m = 2`) and a weighted sum is
+not indifferent. The practical consequence runs the *other* way from what you might expect: at
+`m >= 3` the front's curvature survives normalization, so Tchebycheff is load-bearing again rather
+than merely tie-breaking. This matters because **every synthetic experiment in this repo is
+`m = 2`, while every shipped LLM config is `m = 3`** — the measured results understate what
+Tchebycheff contributes in the configuration you would actually train. Both the `m = 2` property
+and its failure at `m = 3` are asserted in `tests/test_scalarization.py`.
 
 ### 2.3 Smooth Tchebycheff achievement
 
@@ -362,3 +372,37 @@ including the parts that did not go the way the design predicted:
 
 The two unestablished mechanisms are the reason the LLM experiment matters rather than being a
 victory lap: it is the setting where they are testable at all.
+
+### 8.1 Three objectives change the conclusion
+
+Everything above is `m = 2`; every shipped LLM config is `m = 3`. Measured at three objectives
+([`results/M3_RESULTS.md`](results/M3_RESULTS.md)):
+
+- **PaCE's machinery no longer leads.** A plain conditioned weighted sum wins both geometries
+  (27.1% vs 17.2% concave, 57.2% vs 46.8% convex). Quadrupling the budget leaves the ordering
+  flat, so it is not undertraining.
+- **The conditioning claim survives and strengthens.** `fixed_scalar` stays worst by a wide
+  margin at both `m = 2` and `m = 3`, and the gap widens with more objectives.
+- **A prediction in §2.2 is contradicted.** I argued that because rank normalization only
+  linearizes the front at `m = 2`, Tchebycheff should be *more* load-bearing at `m = 3`. The
+  geometric premise is correct and measured; the conclusion is wrong — `pace_linear` beats `pace`
+  on the `m = 3` concave front. Geometry did not license the inference to a training outcome.
+
+So the defensible position today is narrower than §2 implies: **conditioning is what pays, and
+rank normalization is the one component of PaCE with a robust general advantage** (scale
+invariance, §8). The Tchebycheff/cross-direction/bandit stack is unproven, and at three
+objectives the Tchebycheff part appears to cost something. Either it wins in a regime
+`cond_linear` cannot reach — badly-scaled real reward suites, or the high-variance rollouts of an
+actual LLM — or it should be cut back to rank normalization plus conditioning.
+
+### 8.2 The LLM path has now been executed
+
+Not against a real checkpoint — there is still no GPU — but end-to-end against a 37k-parameter
+randomly-initialized GPT-2 with a stub tokenizer (`tests/test_llm_trainer.py`, run in CI). That
+was enough to find a real bug: policy dropout was active during both log-probability passes, so
+the importance ratio was sampling noise rather than exactly 1 on a single inner epoch. PPO
+clipping fired on that noise and the KL penalty charged the policy for it. Fixed by disabling
+policy dropout (`_disable_dropout`), with the invariant `KL == 0` asserted as a regression guard.
+
+The lesson generalizes: almost nothing that goes wrong in an RL trainer needs a big model to
+expose. Shapes, masking, gradient flow, and ratio invariants are all visible at 37k parameters.

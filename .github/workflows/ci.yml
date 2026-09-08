@@ -56,3 +56,22 @@ jobs:
         run: python experiments/synthetic_frontier.py --seeds 2 --steps 60 --workers 2 --output /tmp/smoke.json
       - name: Config dry-run
         run: python scripts/train_llm.py --config configs/gemma4_e4b.yaml --dry-run > /dev/null
+
+  llm-path:
+    # The LLM trainer runs against a 37k-parameter randomly-initialized model with a stub
+    # tokenizer -- no GPU, no hub access. That is enough to catch shape errors, masking
+    # bugs, broken gradient flow, and the importance-ratio invariant, which is how the
+    # policy-dropout bug was found. CPU-only torch keeps the download to a few hundred MB.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install (CPU-only torch)
+        run: |
+          python -m pip install -U pip
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -e '.[dev]' transformers
+      - name: LLM trainer tests
+        run: pytest tests/test_llm_trainer.py -q

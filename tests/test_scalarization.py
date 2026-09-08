@@ -129,3 +129,33 @@ def test_rank_normalization_linearizes_front_geometry_and_tchebycheff_breaks_the
 
     tch_choice = int(tchebycheff(U, balanced).argmax(axis=0)[0])
     assert 2 <= tch_choice <= 5, "Tchebycheff should strictly select a balanced point"
+
+
+def test_rank_linearization_is_a_two_objective_accident_and_does_not_generalize():
+    """Scope check on the interaction documented above -- it holds only for m = 2.
+
+    With two objectives on a monotone front the ranks of objective 0 are a permutation of
+    the uniform grid and the ranks of objective 1 are exactly its reverse, so ``u_0 + u_1``
+    is identically 1: the front is linear in rank space and a weighted sum is indifferent.
+    Nothing forces that at m >= 3 -- three rank permutations are not mutually reversed --
+    so rank space keeps the front's curvature and a weighted sum is *not* indifferent.
+
+    This matters for how the method is configured: at m = 2 Tchebycheff's job is mostly
+    breaking a tie the ranks created, while at m >= 3 the concavity survives normalization
+    and Tchebycheff is load-bearing again. The shipped LLM configs are all m = 3.
+    """
+    from pace.core.directions import das_dennis
+
+    t = np.linspace(0, 1, 8)
+    F2 = np.stack([1 - np.sqrt(1 - t), 1 - np.sqrt(t)], axis=1)
+    sums2 = rank_normalize(F2).sum(axis=1)
+    np.testing.assert_allclose(sums2, 1.0, atol=1e-12)
+
+    T = das_dennis(3, 6)
+    F3 = 1 - np.power(np.clip(1 - T, 0.0, 1.0), 0.5)
+    sums3 = rank_normalize(F3).sum(axis=1)
+    assert sums3.max() - sums3.min() > 0.1, "m=3 rank vectors should not be co-planar"
+
+    balanced = np.array([[1 / 3, 1 / 3, 1 / 3]])
+    scores = linear(rank_normalize(F3), balanced).ravel()
+    assert scores.max() - scores.min() > 1e-3, "a weighted sum is not indifferent at m=3"

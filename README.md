@@ -27,12 +27,13 @@ Being precise about this, because the repo contains both.
 
 | Component | Status |
 |---|---|
-| `pace/core/*` — frontier math, scalarization, directions, advantages | **Tested.** 51 unit tests, including hypervolume against a brute-force oracle and finite-difference gradient checks |
+| `pace/core/*` — frontier math, scalarization, directions, advantages | **Tested.** 57 tests, including hypervolume against a brute-force oracle and finite-difference gradient checks |
 | `pace/envs/*` — synthetic environment + trainer | **Runs.** Full experiment reproduces on CPU in minutes; exact oracle cross-checked against brute-force enumeration |
 | `experiments/synthetic_frontier.py` | **Run.** Numbers in `results/` come from it |
 | `pace/llm/rewards.py`, `pace/llm/conditioning.py` | **Tested.** Pure Python, no GPU needed |
-| `pace/llm/trainer.py`, `pace/llm/trl_adapter.py`, `scripts/train_llm.py` | **Never executed.** No GPU or torch in the development environment. Reviewed code, not working code — expect to fix details on first run. Config parsing *is* tested |
-| Gemma 4 / Muse Glimmer results | **None exist.** No LLM has been trained with this |
+| `pace/llm/trainer.py` | **Executed, not GPU-verified.** Driven end-to-end against a 37k-parameter randomly-initialized model with a stub tokenizer (`tests/test_llm_trainer.py`, in CI). That found and fixed a real bug: policy dropout was live during both log-prob passes, making the importance ratio noise. Never run against a real checkpoint |
+| `pace/llm/trl_adapter.py`, `scripts/train_llm.py` | **Not executed.** Config parsing *is* tested |
+| Gemma 4 / Muse Glimmer results | **None exist.** No real LLM has been trained with this |
 
 The synthetic results validate the **optimizer's frontier behaviour**. They say nothing
 about language models.
@@ -44,30 +45,42 @@ pip install -e .            # core only: numpy
 pip install -e '.[dev]'     # + pytest
 pip install -e '.[llm]'     # + torch, transformers, peft, datasets
 
-pytest                                            # 51 tests, ~1s
+pytest                                            # 57 tests (5 need torch)
 python experiments/synthetic_frontier.py --seeds 16 --steps 1500
 python scripts/train_llm.py --config configs/gemma4_e4b.yaml --dry-run
 ```
 
 ## What the numbers say
 
-Measured on the synthetic environment: 20 seeds, identical rollout budget for every method,
-greedy decoding. Full tables and interpretation in [results/RESULTS.md](results/RESULTS.md).
+Measured on the synthetic environment, equal rollout budget for every method, greedy
+decoding. Two objectives: [results/RESULTS.md](results/RESULTS.md). Three objectives —
+which is what the LLM configs actually ship — [results/M3_RESULTS.md](results/M3_RESULTS.md).
 
-- **Concave front** — PaCE reaches **58% of oracle hypervolume with one model**; nine
-  independent fixed-weight runs reach **27%**. This is the case the method exists for.
-- **Convex front** — the ordering **reverses**: the fixed-weight ensemble reaches 94%, PaCE
-  71%. When objectives trade off smoothly, weighted sums are the right tool and PaCE is
-  overhead. The advantage is conditional on geometry, and worth stating up front.
-- **Scale invariance** — applying `exp(4x)` to one objective, which does not move the Pareto
-  set by a single point, leaves PaCE **bit-identical** and collapses a weighted-sum baseline
-  by 5×, the same way on all 20 seeds.
-- **Frontier shaping** is the component with the clearest evidence (removing it costs ~12
-  points of oracle). The **cross-direction advantage matrix** and the **coverage bandit** were
-  **not** established by this environment — it is too small to test a variance-reduction
-  device, and the bandit's effects sit inside one standard error.
-- **Controllability matters as a metric**: a dominance-only advantage posts near-top
-  hypervolume with a preference knob that does nothing (correlation +0.07).
+**The claim that holds everywhere is about conditioning.** One preference-conditioned
+policy beats N independently-trained fixed-weight models at equal budget, and the margin
+widens as objectives are added: 58% vs 27% of oracle at m=2 concave, 17% vs 7% at m=3
+concave, 47% vs 19% at m=3 convex. The simplex needs exponentially more grid points to
+cover as m grows, so the fixed-weight ensemble degrades fastest.
+
+**PaCE's specific machinery is a narrower story, and at m=3 it does not lead.** A plain
+conditioned weighted sum (`cond_linear`) wins both m=3 geometries and the m=2 convex one.
+PaCE leads only on the m=2 concave front (58.4% vs 54.5%). Quadrupling the budget does not
+change the m=3 ordering, so this is not undertraining.
+
+**Rank normalization is the component with a robust, general advantage.** Applying
+`exp(4x)` to one objective moves the Pareto set by zero points; it leaves PaCE bit-identical
+and collapses the weighted-sum baseline 5×, identically on all 20 seeds. Real reward suites
+mix verifiers, learned reward models and cost terms with incommensurable scales — that is
+exactly this regime, and it is the case the synthetic rewards are too well-behaved to show.
+
+**Not established:** the cross-direction advantage matrix (this environment has almost no
+gradient variance for it to reduce) and the coverage bandit (effects inside one standard
+error). **Contradicted:** my prediction that Tchebycheff would matter more at m=3 — the
+geometry argument holds but the training outcome went the other way.
+
+**Controllability is worth measuring separately.** A dominance-only advantage tops the m=3
+concave table with a preference correlation of +0.038, and −0.155 on the convex front — the
+knob does nothing, then runs backwards. On hypervolume alone it looks like the best method.
 
 ## The algorithm in one page
 
@@ -129,7 +142,7 @@ pace/envs/          synthetic multi-objective bandit with tunable front curvatur
 pace/llm/           conditioning, reward suite, trainer, TRL adapter
 experiments/        synthetic_frontier.py — the validation runs
 configs/            gemma4_e4b, gemma4_12b, muse_glimmer_30b
-tests/              51 unit tests
+tests/              57 tests; the LLM-trainer ones skip without torch
 results/            measured output
 .github/workflows/  CI: tests on 3.10-3.12, black, and a short run of the real experiment
 ```

@@ -13,7 +13,7 @@ from itertools import combinations
 
 import numpy as np
 
-__all__ = ["das_dennis", "CoverageBandit", "UniformDirections", "BanditConfig"]
+__all__ = ["das_dennis", "das_dennis_at_most", "CoverageBandit", "UniformDirections", "BanditConfig"]
 
 
 def das_dennis(m: int, n_partitions: int) -> np.ndarray:
@@ -38,6 +38,26 @@ def das_dennis(m: int, n_partitions: int) -> np.ndarray:
         parts.append(n_partitions + m - 2 - prev)
         rows.append(parts)
     return np.asarray(rows, dtype=float) / float(n_partitions)
+
+
+def das_dennis_at_most(m: int, max_points: int) -> np.ndarray:
+    """Densest Das-Dennis grid on the ``(m-1)``-simplex with at most ``max_points`` points.
+
+    Grid size grows as ``C(n + m - 1, m - 1)``, so a resolution chosen for two objectives
+    explodes at three: ``das_dennis(2, 8)`` is 9 directions but ``das_dennis(3, 8)`` is 45
+    and ``das_dennis(4, 8)`` is 165. Anything that means "give me about N directions" must
+    solve for the resolution rather than pass N straight through, or it silently requests
+    an order of magnitude more work as soon as an objective is added.
+    """
+    if max_points < m:
+        raise ValueError(f"need at least {m} points to cover {m} objectives")
+    best = das_dennis(m, 1)
+    for n in range(1, 200):
+        grid = das_dennis(m, n)
+        if grid.shape[0] > max_points:
+            break
+        best = grid
+    return best
 
 
 @dataclass

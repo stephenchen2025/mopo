@@ -78,6 +78,7 @@ def experiment_main(args) -> dict:
     results = {}
     for curvature, label in ((0.5, "concave"), (2.0, "convex")):
         env = SyntheticFrontier(
+            n_objectives=args.objectives,
             curvature=curvature,
             action_resolution=args.action_resolution,
             n_contexts=args.contexts,
@@ -244,6 +245,14 @@ def main() -> None:
     parser.add_argument("--partitions", type=int, default=20)
     parser.add_argument("--action-resolution", type=int, default=20)
     parser.add_argument("--contexts", type=int, default=4)
+    parser.add_argument(
+        "--objectives",
+        type=int,
+        default=2,
+        help="Number of objectives m. The shipped LLM configs use 3, and "
+        "the method ordering differs between m=2 and m=3 -- see "
+        "results/RESULTS.md section 5.",
+    )
     parser.add_argument("--noise", type=float, default=0.05)
     parser.add_argument("--output", type=str, default="results/synthetic_results.json")
     parser.add_argument(

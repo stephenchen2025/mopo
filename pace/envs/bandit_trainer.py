@@ -25,7 +25,7 @@ from ..core.advantages import (
     pace_advantages,
 )
 from ..core.config import PaCEConfig
-from ..core.directions import CoverageBandit, UniformDirections, das_dennis
+from ..core.directions import CoverageBandit, UniformDirections, das_dennis, das_dennis_at_most
 from ..core.metrics import frontier_summary
 from ..core.normalizer import RunningMinMax
 from ..core.scalarization import achievement_matrix, direction_scale
@@ -161,7 +161,11 @@ def _train_fixed_scalar(env: SyntheticFrontier, cfg: TrainConfig) -> tuple[list[
     exactly what a single PaCE run spends. This is also the Rewarded-Soups setting minus
     the weight interpolation.
     """
-    expert_dirs = das_dennis(env.n_objectives, cfg.n_experts - 1)
+    # n_experts is a *count*, not a Das-Dennis resolution. Passing it through as a
+    # resolution happens to be right at m=2 and is wrong everywhere else: it would ask for
+    # 45 experts at m=3 and 165 at m=4, splitting the budget that many ways and turning the
+    # baseline into a strawman precisely when the comparison gets interesting.
+    expert_dirs = das_dennis_at_most(env.n_objectives, cfg.n_experts)
     per_expert = max(1, cfg.steps // len(expert_dirs))
     policies = []
     for e, w in enumerate(expert_dirs):
