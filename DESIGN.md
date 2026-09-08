@@ -418,3 +418,35 @@ policy dropout (`_disable_dropout`), with the invariant `KL == 0` asserted as a 
 
 The lesson generalizes: almost nothing that goes wrong in an RL trainer needs a big model to
 expose. Shapes, masking, gradient flow, and ratio invariants are all visible at 37k parameters.
+
+
+### 8.3 The language-model experiment, and what it settles
+
+[`results/TINY_LM_RESULTS.md`](results/TINY_LM_RESULTS.md) runs the comparison on a 5.9M
+Qwen3 trained from scratch — sampled sequences, token-level credit assignment,
+incommensurable rewards. It was built specifically to test the two mechanisms §8 lists as
+unestablished. The result is negative:
+
+- **No method improves on the pretrained policy** (HV 0.5701). The best reaches 97.8% of it.
+- **Full PaCE finishes last of six** (81.5%), behind its own ablations. Removing the coverage
+  bandit or the frontier shaping *improves* the method.
+- **The cross-direction advantage matrix moves the result by 0.2 standard errors.** This was
+  the environment built to test it, and it is indistinguishable from zero. It costs `K²m`
+  flops and much of the design's complexity.
+- **`cond_mognorm` wins** — the second independent setting where a simple conditioned
+  baseline beats PaCE's machinery.
+
+A missing KL anchor invalidated the first version of that run, and the invalidated run's
+rankings *favoured* PaCE. They are not reported as a comparison; see the write-up for why.
+
+**Where this leaves the design.** §8.1 already narrowed the defensible claim to conditioning
+plus rank normalization. This narrows it further: the Tchebycheff / cross-direction / bandit
+stack has now failed to demonstrate value in every setting with real headroom, and in the two
+most realistic ones a simpler method beat it. The remaining honest position is that PaCE's
+contribution is **rank-space normalization for scale invariance, and verbal preference
+conditioning** — both of which are measured and hold up — and that the rest should be cut
+unless a task with genuine frontier headroom shows otherwise.
+
+The obvious next experiment is that task: one where the pretrained policy is genuinely
+mediocre, so RL has a frontier to *discover* rather than merely preserve. PaCE is designed
+for that case and has not yet been tested in it.

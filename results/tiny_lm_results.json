@@ -1,0 +1,129 @@
+{
+  "config": {
+    "seeds": 3,
+    "steps": 200,
+    "pretrain_steps": 500,
+    "group": 8,
+    "prompts_per_step": 2,
+    "lr": 0.0001,
+    "temperature": 1.0,
+    "kl_coef": 0.02,
+    "clip_range": 0.2,
+    "max_new_tokens": 28,
+    "hidden": 256,
+    "layers": 6,
+    "partitions": 8,
+    "eval_partitions": 8,
+    "eval_problems": 24,
+    "output": "results/tiny_lm_results.json"
+  },
+  "pretrained": {
+    "frontier": [
+      [
+        0.16666666666666666,
+        0.7998437103875345
+      ],
+      [
+        0.16666666666666666,
+        0.7998437103875345
+      ],
+      [
+        0.3333333333333333,
+        0.7270879483690006
+      ],
+      [
+        0.75,
+        0.5073462888010606
+      ],
+      [
+        0.75,
+        0.5073462888010606
+      ],
+      [
+        0.75,
+        0.5073462888010606
+      ],
+      [
+        0.875,
+        0.4531435199874006
+      ],
+      [
+        1.0,
+        0.3804383801329409
+      ],
+      [
+        1.0,
+        0.3804383801329409
+      ]
+    ],
+    "hypervolume": 0.5700806343082405,
+    "spacing": 0.08816955672579363,
+    "max_spread": 0.9329229740393412,
+    "n_nondominated": 9.0,
+    "controllability_obj0": 0.9746794344808963,
+    "controllability_obj1": 0.9746794344808963,
+    "controllability_mean": 0.9746794344808963
+  },
+  "methods": {
+    "pace": {
+      "hypervolume": 0.4646898381786826,
+      "hypervolume_std": 0.06196943220192211,
+      "controllability_mean": 0.9362239911070888,
+      "controllability_mean_std": 0.036126385230831594,
+      "spacing": 0.07699240599604022,
+      "spacing_std": 0.05592965983278715,
+      "max_spread": 1.0282353424632364,
+      "max_spread_std": 0.03566946413822013
+    },
+    "pace_uniform": {
+      "hypervolume": 0.5118802752149587,
+      "hypervolume_std": 0.04218526248916298,
+      "controllability_mean": 0.859663261191879,
+      "controllability_mean_std": 0.0325314864315165,
+      "spacing": 0.1415762010217201,
+      "spacing_std": 0.0867364221388153,
+      "max_spread": 0.9363213769502577,
+      "max_spread_std": 0.08592548325279077
+    },
+    "pace_no_front": {
+      "hypervolume": 0.5018301215681235,
+      "hypervolume_std": 0.0193893835888822,
+      "controllability_mean": 0.748360440864558,
+      "controllability_mean_std": 0.07006629204990844,
+      "spacing": 0.08947544548810578,
+      "spacing_std": 0.03319884990917093,
+      "max_spread": 0.9420276277837637,
+      "max_spread_std": 0.07942330107312986
+    },
+    "pace_no_crossdir": {
+      "hypervolume": 0.47194371314992195,
+      "hypervolume_std": 0.05238843306416699,
+      "controllability_mean": 0.9409176736586519,
+      "controllability_mean_std": 0.029488515708936888,
+      "spacing": 0.0674505492010275,
+      "spacing_std": 0.052267557049109806,
+      "max_spread": 0.9675769288832003,
+      "max_spread_std": 0.03429923520611041
+    },
+    "cond_linear": {
+      "hypervolume": 0.5062900796628619,
+      "hypervolume_std": 0.021619296156525313,
+      "controllability_mean": 0.8758503870045184,
+      "controllability_mean_std": 0.060831669037857104,
+      "spacing": 0.2240461745417387,
+      "spacing_std": 0.1470934303085068,
+      "max_spread": 0.9225272682191664,
+      "max_spread_std": 0.06837553888728419
+    },
+    "cond_mognorm": {
+      "hypervolume": 0.5577279728289534,
+      "hypervolume_std": 0.020258106815016868,
+      "controllability_mean": 0.8857814058627458,
+      "controllability_mean_std": 0.07155865083418692,
+      "spacing": 0.12722155658920709,
+      "spacing_std": 0.13066074748542905,
+      "max_spread": 0.8536608634697096,
+      "max_spread_std": 0.014343971663049994
+    }
+  }
+}

@@ -33,9 +33,26 @@ from dataclasses import dataclass
 
 import numpy as np
 
-__all__ = ["CharTokenizer", "ArithmeticTask", "QWEN3_REFERENCE", "build_tiny_qwen", "pretrain", "measure_style_gap"]
+__all__ = [
+    "CharTokenizer",
+    "ArithmeticTask",
+    "PREF_MARKERS",
+    "QWEN3_REFERENCE",
+    "build_tiny_qwen",
+    "pretrain",
+    "measure_style_gap",
+]
 
-VOCAB = list("0123456789+=;#? cary\n") + ["<pad>", "<eos>", "<bos>"]
+# The last five characters are preference markers: the conditioning channel for a model
+# with no English. On a real instruct model the direction is rendered as instructions
+# (see pace/llm/conditioning.verbalize_preference, +0.860 controllability on Qwen3-0.6B);
+# a 24-character arithmetic model cannot read those, so the direction is a marker token it
+# learns to associate with an answer style during pretraining. That mirrors the real
+# setting, where an instruction-tuned policy already responds to conditioning before RL
+# begins and RL sharpens it -- rather than the unrealistic case of RL having to invent the
+# conditioning channel from nothing.
+PREF_MARKERS = "VWXYZ"
+VOCAB = list("0123456789+=;#? cary\n") + list(PREF_MARKERS) + ["<pad>", "<eos>", "<bos>"]
 
 
 class CharTokenizer:
@@ -119,8 +136,15 @@ class ArithmeticTask:
         return int(self.rng.integers(10, self.max_operand + 1)), int(self.rng.integers(10, self.max_operand + 1))
 
     @staticmethod
-    def question(a: int, b: int) -> str:
-        return f"{a}+{b}="
+    def marker_for(w_accuracy: float) -> str:
+        """Map an accuracy weight in [0, 1] to one of the graded preference markers."""
+        idx = int(round(float(np.clip(w_accuracy, 0.0, 1.0)) * (len(PREF_MARKERS) - 1)))
+        return PREF_MARKERS[idx]
+
+    @staticmethod
+    def question(a: int, b: int, w_accuracy: float | None = None) -> str:
+        prefix = "" if w_accuracy is None else ArithmeticTask.marker_for(w_accuracy)
+        return f"{prefix}{a}+{b}="
 
     @staticmethod
     def worked(a: int, b: int) -> str:
@@ -134,13 +158,28 @@ class ArithmeticTask:
     def direct(a: int, b: int) -> str:
         return f"#{a + b}"
 
-    def corpus(self, n: int, worked_fraction: float = 0.5) -> list[str]:
-        """Pretraining corpus mixing both styles, so RL has both modes available."""
+    def corpus(self, n: int, conditioned: bool = True, floor: float = 0.15, span: float = 0.70) -> list[str]:
+        """Pretraining corpus. Each row carries a preference marker and a matching style.
+
+        The marker biases the style rather than determining it: at marker index ``k`` of
+        ``K``, the worked style appears with probability ``floor + span * k/(K-1)``, so the
+        pretrained policy starts with *partial* controllability. Making it deterministic
+        would hand the whole problem to pretraining and leave RL nothing to do; leaving it
+        absent would make RL invent a conditioning channel from nothing, which is not the
+        situation a real instruct model is in either.
+        """
         rows = []
+        levels = len(PREF_MARKERS)
         for _ in range(n):
             a, b = self.sample()
-            body = self.worked(a, b) if self.rng.random() < worked_fraction else self.direct(a, b)
-            rows.append(self.question(a, b) + body + "\n")
+            if conditioned:
+                k = int(self.rng.integers(levels))
+                w_acc = k / (levels - 1)
+                p_worked = floor + span * w_acc
+            else:
+                w_acc, p_worked = None, 0.5
+            body = self.worked(a, b) if self.rng.random() < p_worked else self.direct(a, b)
+            rows.append(self.question(a, b, w_acc) + body + "\n")
         return rows
 
 
@@ -255,7 +294,8 @@ def measure_style_gap(model, tokenizer, task, n: int = 200, max_new_tokens: int 
             a, b = task.sample()
             # Prime the style by prefilling its first characters, so the comparison is
             # between styles rather than between whatever the model felt like emitting.
-            prefix = task.question(a, b) + ("" if style == "worked" else "#")
+            # Prime by preference marker, which is the conditioning channel under test.
+            prefix = task.question(a, b, 1.0 if style == "worked" else 0.0)
             enc = tokenizer([prefix], return_tensors="pt", padding=True)
             with torch.no_grad():
                 out = model.generate(

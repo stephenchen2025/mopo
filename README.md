@@ -52,37 +52,39 @@ python scripts/train_llm.py --config configs/gemma4_e4b.yaml --dry-run
 
 ## What the numbers say
 
-Measured on the synthetic environment, equal rollout budget for every method, greedy
-decoding. Two objectives: [results/RESULTS.md](results/RESULTS.md). Three objectives —
-which is what the LLM configs actually ship — [results/M3_RESULTS.md](results/M3_RESULTS.md).
+Three settings have been measured. Read them together, because they do not agree.
 
-**The claim that holds everywhere is about conditioning.** One preference-conditioned
-policy beats N independently-trained fixed-weight models at equal budget, and the margin
-widens as objectives are added: 58% vs 27% of oracle at m=2 concave, 17% vs 7% at m=3
-concave, 47% vs 19% at m=3 convex. The simplex needs exponentially more grid points to
-cover as m grows, so the fixed-weight ensemble degrades fastest.
+| setting | winner | PaCE's position |
+|---|---|---|
+| Synthetic bandit, **2 objectives**, concave front | `pace` | **best** (58% of oracle vs 27% for N fixed-weight runs) |
+| Synthetic bandit, **3 objectives** ([M3](results/M3_RESULTS.md)) | `cond_linear` | beaten in both geometries |
+| **Small language model** ([tiny-LM](results/TINY_LM_RESULTS.md)) | `cond_mognorm` | **last of six**, beaten by its own ablations |
 
-**PaCE's specific machinery is a narrower story, and at m=3 it does not lead.** A plain
-conditioned weighted sum (`cond_linear`) wins both m=3 geometries and the m=2 convex one.
-PaCE leads only on the m=2 concave front (58.4% vs 54.5%). Quadrupling the budget does not
-change the m=3 ordering, so this is not undertraining.
+**The honest summary: PaCE's advantage estimator has never beaten a simple conditioned
+baseline outside the two-objective synthetic case, and in the two settings closest to a real
+LLM it has been beaten by one.** On the small language model the full method finishes last
+of six, and removing either the coverage bandit or the frontier shaping *improves* it.
 
-**Rank normalization is the component with a robust, general advantage.** Applying
-`exp(4x)` to one objective moves the Pareto set by zero points; it leaves PaCE bit-identical
-and collapses the weighted-sum baseline 5×, identically on all 20 seeds. Real reward suites
-mix verifiers, learned reward models and cost terms with incommensurable scales — that is
-exactly this regime, and it is the case the synthetic rewards are too well-behaved to show.
+**What does hold up:**
 
-**Not established:** the cross-direction advantage matrix (this environment has almost no
-gradient variance for it to reduce) and the coverage bandit (effects inside one standard
-error). **Contradicted:** my prediction that Tchebycheff would matter more at m=3 — the
-geometry argument holds but the training outcome went the other way.
+- **Conditioning beats N separate runs.** One preference-conditioned policy beats N
+  independently-trained fixed-weight models at equal budget, everywhere it was measured, and
+  the margin widens with more objectives. This is a claim about *conditioning*, not about
+  PaCE — `cond_linear` and `cond_mognorm` are conditioned too.
+- **Rank normalization is scale-invariant, and that is worth something.** Applying `exp(4x)`
+  to one objective moves the Pareto set by zero points; it leaves PaCE bit-identical and
+  collapses a weighted-sum baseline 5×, identically on all 20 seeds. Real reward suites mix
+  verifiers, learned reward models and cost terms with incommensurable scales.
+- **Verbal conditioning works and numeric conditioning does not.** On real Qwen3-0.6B,
+  `<preference>accuracy=0.70 brevity=0.30</preference>` gives **+0.000** controllability;
+  the same weights rendered as instructions give **+0.860**
+  ([details](results/REAL_MODEL_CONDITIONING.md)).
 
-**Controllability is worth measuring separately.** A dominance-only advantage tops the m=3
-concave table with a preference correlation of +0.038, and −0.155 on the convex front — the
-knob does nothing, then runs backwards. On hypervolume alone it looks like the best method.
+**What is not established:** the cross-direction advantage matrix (ablating it moves the
+small-LM result by 0.2 standard errors) and the coverage bandit (no benefit in three
+settings, and a negative point estimate in the most realistic one).
 
-## The algorithm in one page
+## The algorithm in one page## The algorithm in one page
 
 One policy `π_θ(y | x, w)` conditioned on a preference direction `w` on the simplex. Per
 prompt, generate `K` rollouts under `K` *different* directions, then:
