@@ -227,6 +227,15 @@ def main() -> None:
     ap.add_argument("--pretrain-steps", type=int, default=500)
     ap.add_argument("--n-digits", type=int, default=2)
     ap.add_argument(
+        "--methods",
+        type=str,
+        default="",
+        help="Comma-separated subset of methods to run. Use to spend seeds on a "
+        "single controlled comparison instead of spreading them across the "
+        "whole grid -- the collapse outcome is bimodal, so estimating its "
+        "RATE needs more seeds than comparing means would suggest.",
+    )
+    ap.add_argument(
         "--start-floor",
         type=float,
         default=0.15,
@@ -384,6 +393,13 @@ def main() -> None:
         "cond_linear": dict(advantage=linear_scalar_advantages, heterogeneous=False, bandit=False),
         "cond_mognorm": dict(advantage=mo_grpo_advantages, heterogeneous=False, bandit=False),
     }
+
+    if args.methods:
+        wanted = [m.strip() for m in args.methods.split(",") if m.strip()]
+        unknown = [m for m in wanted if m not in methods]
+        if unknown:
+            raise SystemExit(f"unknown methods: {unknown}; available: {sorted(methods)}")
+        methods = {m: methods[m] for m in wanted}
 
     print(f"[3/3] RL: {len(methods)} methods x {args.seeds} seeds x {args.steps} steps", flush=True)
     results = {

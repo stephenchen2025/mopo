@@ -1,0 +1,164 @@
+{
+  "config": {
+    "seeds": 3,
+    "steps": 200,
+    "pretrain_steps": 500,
+    "n_digits": 2,
+    "start_floor": 0.45,
+    "start_span": 0.1,
+    "ceiling_floor": 0.15,
+    "ceiling_span": 0.7,
+    "ceiling_steps": 500,
+    "group": 8,
+    "prompts_per_step": 2,
+    "lr": 0.0001,
+    "temperature": 1.0,
+    "kl_coef": 0.02,
+    "clip_range": 0.2,
+    "max_new_tokens": 28,
+    "hidden": 256,
+    "layers": 6,
+    "partitions": 8,
+    "eval_partitions": 8,
+    "eval_problems": 24,
+    "output": "results/tiny_lm_align.json"
+  },
+  "pretrained": {
+    "frontier": [
+      [
+        0.4166666666666667,
+        0.5259113102032901
+      ],
+      [
+        0.4166666666666667,
+        0.5259113102032901
+      ],
+      [
+        0.4583333333333333,
+        0.5462148051529686
+      ],
+      [
+        0.375,
+        0.5665183001026471
+      ],
+      [
+        0.375,
+        0.5665183001026471
+      ],
+      [
+        0.375,
+        0.5665183001026471
+      ],
+      [
+        0.4583333333333333,
+        0.5462148051529686
+      ],
+      [
+        0.4583333333333333,
+        0.5259113102032901
+      ],
+      [
+        0.4583333333333333,
+        0.5259113102032901
+      ]
+    ],
+    "hypervolume": 0.2579622629679067,
+    "spacing": 0.0,
+    "max_spread": 0.08577106943262433,
+    "n_nondominated": 5.0,
+    "controllability_obj0": 0.37416573867739417,
+    "controllability_obj1": 0.0,
+    "controllability_mean": 0.18708286933869708
+  },
+  "ceiling_hypervolume": 0.2996459224711288,
+  "methods": {
+    "pace": {
+      "hypervolume": 0.5859969755341007,
+      "hypervolume_std": 0.02816539635051757,
+      "controllability_mean": 0.028867513459481284,
+      "controllability_mean_std": 0.0408248290463863,
+      "spacing": 0.0,
+      "spacing_std": 0.0,
+      "max_spread": 0.0,
+      "max_spread_std": 0.0,
+      "gap_closed": 7.8696236481069315
+    },
+    "pace_uniform": {
+      "hypervolume": 0.6204473943210134,
+      "hypervolume_std": 0.02769739134318112,
+      "controllability_mean": 0.1010362971081845,
+      "controllability_mean_std": 0.14999999999999997,
+      "spacing": 0.0,
+      "spacing_std": 0.0,
+      "max_spread": 0.0,
+      "max_spread_std": 0.0,
+      "gap_closed": 8.696096640101546
+    },
+    "pace_no_front": {
+      "hypervolume": 0.5741603187561292,
+      "hypervolume_std": 0.03223752006458438,
+      "controllability_mean": 0.15590239111558088,
+      "controllability_mean_std": 0.22047927592204922,
+      "spacing": 0.0,
+      "spacing_std": 0.0,
+      "max_spread": 0.0,
+      "max_spread_std": 0.0,
+      "gap_closed": 7.585659693909087
+    },
+    "pace_no_crossdir": {
+      "hypervolume": 0.5285129724271708,
+      "hypervolume_std": 0.0425632278273491,
+      "controllability_mean": 0.06236095644623236,
+      "controllability_mean_std": 0.08819171036881969,
+      "spacing": 0.0,
+      "spacing_std": 0.0,
+      "max_spread": 0.0,
+      "max_spread_std": 0.0,
+      "gap_closed": 6.4905699903423955
+    },
+    "pace_align": {
+      "hypervolume": 0.49436242671959807,
+      "hypervolume_std": 0.04301708896927617,
+      "controllability_mean": 0.01515839242366975,
+      "controllability_mean_std": 0.2760770661653253,
+      "spacing": 0.0,
+      "spacing_std": 0.0,
+      "max_spread": 0.0,
+      "max_spread_std": 0.0,
+      "gap_closed": 5.6712910183286045
+    },
+    "pace_align_only": {
+      "hypervolume": 0.5054793881071533,
+      "hypervolume_std": 0.11331389069744983,
+      "controllability_mean": 0.17710887453945756,
+      "controllability_mean_std": 0.12891298487925018,
+      "spacing": 0.0,
+      "spacing_std": 0.0,
+      "max_spread": 0.0,
+      "max_spread_std": 0.0,
+      "gap_closed": 5.9379893245724675
+    },
+    "cond_linear": {
+      "hypervolume": 0.5855971447616471,
+      "hypervolume_std": 0.07398958158775563,
+      "controllability_mean": 0.08231358044408908,
+      "controllability_mean_std": 0.11640898183151957,
+      "spacing": 0.0,
+      "spacing_std": 0.0,
+      "max_spread": 0.0,
+      "max_spread_std": 0.0,
+      "gap_closed": 7.860031621465829
+    },
+    "cond_mognorm": {
+      "hypervolume": 0.47190859701963833,
+      "hypervolume_std": 0.04336997731594207,
+      "controllability_mean": 0.09706783423635575,
+      "controllability_mean_std": 0.14220940406417026,
+      "spacing": 0.0,
+      "spacing_std": 0.0,
+      "max_spread": 0.02778192116040053,
+      "max_spread_std": 0.039289569693818506,
+      "gap_closed": 5.1326187911882775
+    }
+  }
+}

@@ -1,5 +1,14 @@
 # PaCE on a small language model — the result is negative
 
+> **⚠️ Statistical caveat added after the fact.** An 8-seed run
+> ([`ALIGNMENT_RESULTS.md`](ALIGNMENT_RESULTS.md)) showed the per-seed spread here is far
+> larger than 3 seeds suggested: SD 0.257 for controllability and 0.197 for hypervolume.
+> Three seeds resolve a difference of roughly **0.42**; the between-method differences
+> reported below are **0.03 to 0.15**. **The method rankings in this document are not
+> statistically supported.** The qualitative findings stand — collapse happens, hypervolume
+> rewards it, the bugs are real — but do not read the ordering as evidence that one advantage
+> estimator beats another.
+
 This is the experiment the synthetic bandit could not run: a 5.9M-parameter Qwen3 trained
 from scratch, with sampled sequences, token-level credit assignment, and deliberately
 incommensurable rewards (a 0/1 verifier against an exponential length term). It exists to

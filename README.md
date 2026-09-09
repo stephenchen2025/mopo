@@ -93,6 +93,17 @@ PaCE variants resist the collapse better than plain baselines (all four keep pos
 controllability; both baselines go negative), which is a real if modest point in their
 favour. None retains the conditioning it started with.
 
+**How much of this is resolvable.** An 8-seed controlled comparison
+([ALIGNMENT_RESULTS.md](results/ALIGNMENT_RESULTS.md)) found the language-model testbed has a
+per-seed SD of 0.257 in controllability and 0.197 in hypervolume — identical configurations
+producing hypervolumes from 0.0000 to 0.6209. Three seeds resolve a difference of ~0.42;
+the method differences reported from 3-seed runs were 0.03–0.15. **The LM method rankings in
+this repo are not statistically supported**, and resolving a 0.10 controllability difference
+would need 104 seeds per arm (12.5 hours per contrast). The synthetic results, run at 20
+seeds with an order of magnitude less spread, are unaffected. A direction-alignment term
+built to prevent the collapse was tested and **did not help** (4/8 collapses with it, 2/8
+without); it ships defaulted off.
+
 **What is not established:** the cross-direction advantage matrix (ablating it moves the
 small-LM result by 0.2 standard errors) and the coverage bandit (no benefit in three
 settings, and a negative point estimate in the most realistic one).

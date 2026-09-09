@@ -1,0 +1,97 @@
+{
+  "config": {
+    "seeds": 8,
+    "steps": 200,
+    "pretrain_steps": 500,
+    "n_digits": 2,
+    "methods": "pace_no_front,pace_align_only",
+    "start_floor": 0.45,
+    "start_span": 0.1,
+    "ceiling_floor": 0.15,
+    "ceiling_span": 0.7,
+    "ceiling_steps": 0,
+    "group": 8,
+    "prompts_per_step": 2,
+    "lr": 0.0001,
+    "temperature": 1.0,
+    "kl_coef": 0.02,
+    "clip_range": 0.2,
+    "max_new_tokens": 28,
+    "hidden": 256,
+    "layers": 6,
+    "partitions": 8,
+    "eval_partitions": 8,
+    "eval_problems": 24,
+    "output": "results/tiny_lm_align_seeds.json"
+  },
+  "pretrained": {
+    "frontier": [
+      [
+        0.75,
+        0.5038066913447327
+      ],
+      [
+        0.75,
+        0.5038066913447327
+      ],
+      [
+        0.75,
+        0.5038066913447327
+      ],
+      [
+        0.7916666666666666,
+        0.5038066913447327
+      ],
+      [
+        0.7916666666666666,
+        0.5038066913447327
+      ],
+      [
+        0.7916666666666666,
+        0.5038066913447327
+      ],
+      [
+        0.7083333333333334,
+        0.5038066913447327
+      ],
+      [
+        0.75,
+        0.5038066913447327
+      ],
+      [
+        0.75,
+        0.5038066913447327
+      ]
+    ],
+    "hypervolume": 0.3988469639812467,
+    "spacing": 0.0,
+    "max_spread": 0.0,
+    "n_nondominated": 3.0,
+    "controllability_obj0": -0.1118033988749895,
+    "controllability_obj1": 0.0,
+    "controllability_mean": -0.05590169943749475
+  },
+  "ceiling_hypervolume": null,
+  "methods": {
+    "pace_no_front": {
+      "hypervolume": 0.4410621729167513,
+      "hypervolume_std": 0.18235765041040883,
+      "controllability_mean": -0.0246006236344799,
+      "controllability_mean_std": 0.302439575294276,
+      "spacing": 0.0016933658628524215,
+      "spacing_std": 0.004480224951753815,
+      "max_spread": 0.010422880350852686,
+      "max_spread_std": 0.018052958328888178
+    },
+    "pace_align_only": {
+      "hypervolume": 0.3836470219900374,
+      "hypervolume_std": 0.2121021214001318,
+      "controllability_mean": 0.041544562987065485,
+      "controllability_mean_std": 0.21137714939466318,
+      "spacing": 0.0,
+      "spacing_std": 0.0,
+      "max_spread": 0.0,
+      "max_spread_std": 0.0
+    }
+  }
+}

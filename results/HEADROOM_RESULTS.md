@@ -1,5 +1,14 @@
 # When RL has a frontier to discover, it collapses it instead
 
+> **⚠️ Statistical caveat added after the fact.** An 8-seed run
+> ([`ALIGNMENT_RESULTS.md`](ALIGNMENT_RESULTS.md)) showed the per-seed spread here is far
+> larger than 3 seeds suggested: SD 0.257 for controllability and 0.197 for hypervolume.
+> Three seeds resolve a difference of roughly **0.42**; the between-method differences
+> reported below are **0.03 to 0.15**. **The method rankings in this document are not
+> statistically supported.** The qualitative findings stand — collapse happens, hypervolume
+> rewards it, the bugs are real — but do not read the ordering as evidence that one advantage
+> estimator beats another.
+
 The [first language-model experiment](TINY_LM_RESULTS.md) was a poor test: pretraining had
 already built the frontier, so RL could only preserve or damage it. This one fixes that. The
 start policy is competent (accuracy ~0.42) but **weakly conditioned** — it produces nearly
