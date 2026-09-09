@@ -1,0 +1,104 @@
+{
+  "config": {
+    "seeds": 8,
+    "steps": 200,
+    "pretrain_steps": 500,
+    "n_digits": 2,
+    "methods": "pace_no_front,pace_align_only",
+    "start_floor": 0.45,
+    "start_span": 0.1,
+    "ceiling_floor": 0.15,
+    "ceiling_span": 0.7,
+    "ceiling_steps": 0,
+    "group": 8,
+    "prompts_per_step": 2,
+    "lr": 0.0001,
+    "temperature": 1.0,
+    "kl_coef": 0.02,
+    "clip_range": 0.2,
+    "max_new_tokens": 28,
+    "hidden": 256,
+    "layers": 6,
+    "partitions": 8,
+    "eval_partitions": 8,
+    "eval_problems": 48,
+    "output": "results/tiny_lm_lowvar.json"
+  },
+  "pretrained": {
+    "frontier": [
+      [
+        0.4375,
+        0.5636819860505163
+      ],
+      [
+        0.4375,
+        0.5636819860505163
+      ],
+      [
+        0.4583333333333333,
+        0.5831385683283924
+      ],
+      [
+        0.4791666666666667,
+        0.6237455582277494
+      ],
+      [
+        0.4791666666666667,
+        0.6237455582277494
+      ],
+      [
+        0.4791666666666667,
+        0.6237455582277494
+      ],
+      [
+        0.4791666666666667,
+        0.5738337335253556
+      ],
+      [
+        0.4791666666666667,
+        0.5636819860505163
+      ],
+      [
+        0.4791666666666667,
+        0.5636819860505163
+      ]
+    ],
+    "hypervolume": 0.2988780799841299,
+    "spacing": 0.0,
+    "max_spread": 0.0,
+    "n_nondominated": 3.0,
+    "controllability_obj0": 0.8366600265340755,
+    "controllability_obj1": 0.03546634510659544,
+    "controllability_mean": 0.43606318582033543,
+    "steerability_obj0": 0.04444444444444444,
+    "steerability_obj1": 0.004754983061976735,
+    "steerability_mean": 0.024599713753210586
+  },
+  "ceiling_hypervolume": null,
+  "methods": {
+    "pace_no_front": {
+      "hypervolume": 0.547482964163377,
+      "hypervolume_std": 0.057900001028053164,
+      "controllability_mean": 0.020797603478286186,
+      "controllability_mean_std": 0.1324243545937075,
+      "steerability_mean": 0.003472222222222228,
+      "steerability_mean_std": 0.004280843057617341,
+      "spacing": 0.0,
+      "spacing_std": 0.0,
+      "max_spread": 0.0,
+      "max_spread_std": 0.0
+    },
+    "pace_align_only": {
+      "hypervolume": 0.48361222749453847,
+      "hypervolume_std": 0.08343331516878591,
+      "controllability_mean": 0.1889611547399609,
+      "controllability_mean_std": 0.17727686743198132,
+      "steerability_mean": 0.011801939180594665,
+      "steerability_mean_std": 0.010397120950062006,
+      "spacing": 0.0008909992813011401,
+      "spacing_std": 0.0023573625166600993,
+      "max_spread": 0.010424954623178967,
+      "max_spread_std": 0.014738356903612831
+    }
+  }
+}

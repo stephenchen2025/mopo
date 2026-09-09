@@ -237,6 +237,14 @@ def run_method(method, cfg, args, base_state, tok, task, torch):
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--seeds", type=int, default=3)
+    ap.add_argument(
+        "--seed-offset",
+        type=int,
+        default=0,
+        help="Start seeds at this offset instead of 0, so a sweep can be "
+        "EXTENDED without recomputing seeds already run. Use with "
+        "merge_results.py to combine the two JSON outputs.",
+    )
     ap.add_argument("--steps", type=int, default=250)
     ap.add_argument("--pretrain-steps", type=int, default=500)
     ap.add_argument("--n-digits", type=int, default=2)
@@ -429,7 +437,7 @@ def main() -> None:
     }
     for name, spec in methods.items():
         runs = []
-        for seed in range(args.seeds):
+        for seed in range(args.seed_offset, args.seed_offset + args.seeds):
             t = time.time()
             cfg = dict(spec, seed=seed)
             summary, F = run_method(name, cfg, args, base_state, tok, task, torch)

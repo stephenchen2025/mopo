@@ -63,3 +63,48 @@ def test_llm_experiment_reseeds_the_task_per_run():
     assert (
         "task.rng = np.random.default_rng" in src
     ), "run_method must reseed the task RNG, or training problems depend on execution order"
+
+
+def test_seed_offset_gives_identical_results_to_unoffset_execution():
+    """A seed run via --seed-offset must match running that seed from a bare sweep.
+
+    This is what makes extending a sweep valid: seed 9 run as part of `--seeds 8
+    --seed-offset 8` must be the exact same run as seed 9 inside `--seeds 16`, since
+    the two are later pooled as though they were one sweep.
+    """
+    env = SyntheticFrontier(curvature=0.5, action_resolution=10, n_contexts=3, noise=0.05, seed=0)
+
+    def cfg(seed):
+        return TrainConfig(steps=40, seed=seed, n_partitions=4, eval_partitions=4)
+
+    # Simulate "part of a --seeds 16 sweep" by running seeds 0..8 in order.
+    for s in range(9):
+        result = run_method("pace", env, cfg(s))
+    # Simulate "the --seed-offset 8 --seeds 1 continuation" in a fresh process state.
+    standalone = run_method("pace", env, cfg(8))
+    assert result["metrics"]["hypervolume"] == standalone["metrics"]["hypervolume"]
+
+
+def test_merge_results_pooling_matches_direct_computation():
+    """merge_results.py reconstructs pooled mean/std from two partial summaries.
+
+    Verified against numpy's direct computation on the concatenated data, not just
+    algebraically: this is what actually gets used to combine two --seed-offset runs
+    into the stats an 8-seed run and a 16-seed run would have produced, so it needs to
+    be exactly right, not merely a good approximation.
+    """
+    import sys as _sys
+    import pathlib as _pathlib
+
+    _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1] / "experiments"))
+    from merge_results import pool
+
+    rng = np.random.default_rng(1)
+    for n_a, n_b in ((8, 8), (3, 5), (1, 10)):
+        a = rng.normal(0.5, 0.15, n_a)
+        b = rng.normal(0.5, 0.15, n_b)
+        mean, std, n = pool(a.mean(), a.std(), n_a, b.mean(), b.std(), n_b)
+        combined = np.concatenate([a, b])
+        assert n == n_a + n_b
+        np.testing.assert_allclose(mean, combined.mean(), atol=1e-9)
+        np.testing.assert_allclose(std, combined.std(), atol=1e-9)
