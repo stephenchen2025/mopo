@@ -80,6 +80,19 @@ of six, and removing either the coverage bandit or the frontier shaping *improve
   the same weights rendered as instructions give **+0.860**
   ([details](results/REAL_MODEL_CONDITIONING.md)).
 
+**A metric warning that outranks the rest.** In the one setting where RL had real room to
+improve ([headroom experiment](results/HEADROOM_RESULTS.md)), every method **more than
+doubled hypervolume while becoming less steerable than it started** — converging to a single
+operating point with the trade-off dimension pinned constant, nine directions collapsing to
+three points. Hypervolume rewards that: one dominant point beats a well-spread weaker set.
+**Do not report hypervolume for a multi-objective policy without a steerability measure
+beside it.** Controllability has now caught a failure that other metrics celebrated in three
+separate settings.
+
+PaCE variants resist the collapse better than plain baselines (all four keep positive
+controllability; both baselines go negative), which is a real if modest point in their
+favour. None retains the conditioning it started with.
+
 **What is not established:** the cross-direction advantage matrix (ablating it moves the
 small-LM result by 0.2 standard errors) and the coverage bandit (no benefit in three
 settings, and a negative point estimate in the most realistic one).

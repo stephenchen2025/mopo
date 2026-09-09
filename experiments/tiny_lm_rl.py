@@ -402,7 +402,17 @@ def main() -> None:
             gap = ceiling_hv - s0["hypervolume"]
             agg["gap_closed"] = float((agg["hypervolume"] - s0["hypervolume"]) / gap) if gap > 1e-9 else float("nan")
         results["methods"][name] = agg
-        extra = f" gap_closed={agg['gap_closed']:+.1%}" if "gap_closed" in agg else ""
+        if "gap_closed" in agg:
+            # Over 100% means the RL policy passed the supervised reference outright, so
+            # the number is a ratio to a reference rather than a fraction of a bounded
+            # gap. Say which, rather than printing "+869%" as though it were a fraction.
+            extra = (
+                f" vs_ref={agg['gap_closed']:+.1%}"
+                if agg["gap_closed"] <= 1.0
+                else f" EXCEEDED ref by {agg['gap_closed'] - 1:.1%} of the gap"
+            )
+        else:
+            extra = ""
         print(
             f"      -> {name:18s} HV={agg['hypervolume']:.4f} +-{agg['hypervolume_std']:.4f} "
             f"ctrl={agg['controllability_mean']:+.3f}{extra}",
