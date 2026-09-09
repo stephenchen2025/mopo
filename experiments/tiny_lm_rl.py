@@ -109,7 +109,7 @@ def evaluate(model, tok, torch, task, dirs, n_problems, max_new_tokens, seed=0):
     problems = [
         (int(rng.integers(task.lo, task.hi + 1)), int(rng.integers(task.lo, task.hi + 1))) for _ in range(n_problems)
     ]
-    rows = []
+    rows, per_problem = [], []
     for w in dirs:
         texts, lens, golds = [], [], []
         for a, b in problems:
@@ -128,13 +128,27 @@ def evaluate(model, tok, torch, task, dirs, n_problems, max_new_tokens, seed=0):
             lens.append(ids.index(nl) + 1 if nl in ids else len(ids))
             texts.append(tok.decode(comp[0]))
             golds.append(a + b)
-        rows.append(rewards_for(texts, golds, lens).mean(axis=0))
-    return np.stack(rows)
+        per_problem.append(rewards_for(texts, golds, lens))
+        rows.append(per_problem[-1].mean(axis=0))
+    return np.stack(rows), np.stack(per_problem)
 
 
 def run_method(method, cfg, args, base_state, tok, task, torch):
     """Train one method from the shared pretrained checkpoint and evaluate its frontier."""
     torch.manual_seed(cfg["seed"])
+
+    # Reseed the task so a (method, seed) pair is fully determined by its seed.
+    #
+    # Training problems come from task.sample(), and the task RNG is shared and advances
+    # through every method and every seed that ran before. Without this, "seed 5" means
+    # different training data depending on execution order: methods are not paired on data,
+    # so a method-vs-method difference includes an entirely different training stream, and a
+    # single run is not reproducible in isolation. Seed 5 of pace_no_front scored HV 0.0000
+    # inside the 8-seed sweep and 0.5518 when rerun alone, purely from this.
+    #
+    # Pairing methods on identical problems removes that component of the variance outright.
+    task.rng = np.random.default_rng(1000 + cfg["seed"])
+
     model = build_tiny_qwen(tok, hidden=args.hidden, layers=args.layers)
     model.load_state_dict(base_state)
     from pace.llm.trainer import _disable_dropout
@@ -215,8 +229,8 @@ def run_method(method, cfg, args, base_state, tok, task, torch):
         opt.step()
 
     eval_dirs = das_dennis(2, args.eval_partitions)
-    F = evaluate(model, tok, torch, task, eval_dirs, args.eval_problems, args.max_new_tokens)
-    summary = frontier_summary(F, np.zeros(2), eval_dirs)
+    F, O = evaluate(model, tok, torch, task, eval_dirs, args.eval_problems, args.max_new_tokens)
+    summary = frontier_summary(F, np.zeros(2), eval_dirs, observations=O)
     return summary, F
 
 
@@ -332,22 +346,27 @@ def main() -> None:
             floor=0.02,
             span=0.96,
         )
-        Fc = evaluate(ceil_model, tok, torch, task, dirs, args.eval_problems, args.max_new_tokens)
-        sc = frontier_summary(Fc, np.zeros(2), dirs)
+        Fc, Oc = evaluate(ceil_model, tok, torch, task, dirs, args.eval_problems, args.max_new_tokens)
+        sc = frontier_summary(Fc, np.zeros(2), dirs, observations=Oc)
         ceiling_hv = sc["hypervolume"]
         print(
             f"      ceiling HV {ceiling_hv:.4f}  ctrl {sc['controllability_mean']:+.3f} "
+            f"steer {sc.get('steerability_mean', float('nan')):+.3f} "
             f"({(time.time() - t1) / 60:.1f} min)",
             flush=True,
         )
         del ceil_model
 
     print("[2/3] frontier check on the pretrained policy", flush=True)
-    F0 = evaluate(model, tok, torch, task, dirs, args.eval_problems, args.max_new_tokens)
-    s0 = frontier_summary(F0, np.zeros(2), dirs)
+    F0, O0 = evaluate(model, tok, torch, task, dirs, args.eval_problems, args.max_new_tokens)
+    s0 = frontier_summary(F0, np.zeros(2), dirs, observations=O0)
     for w, r in zip(dirs, F0):
         print(f"      w_acc={w[0]:.2f} -> accuracy {r[0]:.3f}  brevity {r[1]:.3f}", flush=True)
-    print(f"      controllability {s0['controllability_mean']:+.3f}  HV {s0['hypervolume']:.4f}", flush=True)
+    print(
+        f"      controllability {s0['controllability_mean']:+.3f}  steerability "
+        f"{s0.get('steerability_mean', float('nan')):+.3f}  HV {s0['hypervolume']:.4f}",
+        flush=True,
+    )
     if ceiling_hv is not None:
         gap = ceiling_hv - s0["hypervolume"]
         print(
@@ -421,7 +440,7 @@ def main() -> None:
                 flush=True,
             )
         agg = {}
-        for k in ("hypervolume", "controllability_mean", "spacing", "max_spread"):
+        for k in ("hypervolume", "controllability_mean", "steerability_mean", "spacing", "max_spread"):
             v = np.array([r[k] for r in runs], dtype=float)
             agg[k], agg[k + "_std"] = float(v.mean()), float(v.std())
         if ceiling_hv is not None:
@@ -441,7 +460,7 @@ def main() -> None:
             extra = ""
         print(
             f"      -> {name:18s} HV={agg['hypervolume']:.4f} +-{agg['hypervolume_std']:.4f} "
-            f"ctrl={agg['controllability_mean']:+.3f}{extra}",
+            f"ctrl={agg['controllability_mean']:+.3f} steer={agg.get('steerability_mean', float('nan')):+.3f}{extra}",
             flush=True,
         )
 

@@ -107,3 +107,48 @@ def test_normalized_crowding_ranks_sparse_above_crowded():
     assert c[0] == 1.0 and c[4] == 1.0  # boundaries stay at the top
     assert c[1] < c[3]  # the crowded pair scores below the isolated point
     assert c[2] < c[3]
+
+
+def test_steerability_does_not_saturate_or_report_spurious_correlation():
+    """Why the slope metric replaced Spearman over per-direction aggregates.
+
+    Spearman sees only D points (9 here) after averaging away the per-problem spread. It
+    saturates at 1.0 for any monotone response, so it cannot distinguish a strongly steerable
+    policy from a weakly steerable one, and on a *collapsed* policy it reports whatever rank
+    order the residual noise happens to produce -- a large spurious magnitude for a policy
+    that is doing nothing at all. Both failure modes inflate the variance of the measurement,
+    which is what made 3-seed comparisons unresolvable (results/ALIGNMENT_RESULTS.md).
+    """
+    from pace.core.metrics import controllability, steerability
+
+    W = np.stack([np.linspace(0, 1, 9), 1 - np.linspace(0, 1, 9)], axis=1)
+    rng = np.random.default_rng(0)
+
+    steerable = np.stack(
+        [
+            np.stack([W[d, 0] * 0.8 + rng.normal(0, 0.15, 24), 0.8 - W[d, 0] * 0.6 + rng.normal(0, 0.15, 24)], axis=1)
+            for d in range(9)
+        ]
+    )
+    collapsed = np.stack([np.stack([rng.normal(0.5, 0.15, 24), rng.normal(0.5, 0.15, 24)], axis=1) for _ in range(9)])
+
+    # Spearman saturates on the steerable case, losing all gradation.
+    assert np.allclose(controllability(W, steerable.mean(axis=1)), 1.0)
+    # The slope does not, and stays well inside (0, 1).
+    slope_good = steerability(W, steerable)
+    assert np.all(slope_good > 0.2) and np.all(slope_good < 0.95)
+
+    # On a collapsed policy the slope stays near zero where Spearman does not.
+    slope_bad = steerability(W, collapsed)
+    assert np.all(np.abs(slope_bad) < 0.15)
+    assert np.all(np.abs(slope_bad) < np.abs(slope_good))
+
+
+def test_steerability_validates_its_input_shape():
+    from pace.core.metrics import steerability
+
+    W = np.stack([np.linspace(0, 1, 4), 1 - np.linspace(0, 1, 4)], axis=1)
+    with pytest.raises(ValueError, match=r"expected \(D, P, m\)"):
+        steerability(W, np.zeros((4, 2)))
+    with pytest.raises(ValueError, match="incompatible"):
+        steerability(W, np.zeros((3, 5, 2)))

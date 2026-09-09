@@ -16,6 +16,7 @@ __all__ = [
     "max_spread",
     "spearman",
     "controllability",
+    "steerability",
     "frontier_summary",
     "FrontierArchive",
 ]
@@ -87,11 +88,59 @@ def controllability(W: np.ndarray, R: np.ndarray) -> np.ndarray:
     return np.array([spearman(W[:, j], R[:, j]) for j in range(W.shape[1])])
 
 
+def steerability(W: np.ndarray, R_obs: np.ndarray) -> np.ndarray:
+    """Per-objective normalized regression slope of achieved reward on requested weight.
+
+    **A finer replacement for :func:`controllability`, and the reason is measurement noise.**
+
+    Spearman over ``D`` direction-*aggregates* has two problems that together make it unable
+    to resolve the differences it is used to compare. It sees only ``D`` points -- 9 in these
+    experiments -- so it is coarse and heavily quantized, and it returns exactly 0.0 whenever
+    achieved rewards happen to be constant, which happened in 10 of 24 runs and turns a
+    continuous quantity into a bimodal one that cannot be averaged meaningfully.
+
+    This uses every ``(direction, problem)`` observation instead of the per-direction means,
+    so ``D x P`` points rather than ``D``, and reports a slope rather than a rank statistic:
+
+        slope_j = cov(w_j, r_j) / var(w_j),  divided by the observed range of r_j
+
+    The normalization makes it comparable across objectives on different scales, and a slope
+    degrades gracefully instead of saturating. Measured per-seed SD drops accordingly -- see
+    ``results/ALIGNMENT_RESULTS.md`` for why that matters more than any single comparison.
+
+    Args:
+        W: ``(D, m)`` requested directions.
+        R_obs: ``(D, P, m)`` achieved rewards, per direction and per problem.
+
+    **Higher is better; near zero means the preference knob does nothing.**
+    """
+    W = np.atleast_2d(np.asarray(W, dtype=float))
+    R_obs = np.asarray(R_obs, dtype=float)
+    if R_obs.ndim != 3:
+        raise ValueError(f"expected (D, P, m) observations, got shape {R_obs.shape}")
+    D, P, m = R_obs.shape
+    if W.shape[0] != D or W.shape[1] != m:
+        raise ValueError(f"W {W.shape} incompatible with observations {R_obs.shape}")
+
+    out = np.zeros(m, dtype=float)
+    for j in range(m):
+        x = np.repeat(W[:, j], P)  # requested weight, one entry per observation
+        y = R_obs[:, :, j].reshape(-1)  # achieved reward for that observation
+        var = x.var()
+        if var < 1e-12:
+            continue
+        slope = float(((x - x.mean()) * (y - y.mean())).mean() / var)
+        span = float(y.max() - y.min())
+        out[j] = slope / span if span > 1e-12 else 0.0
+    return out
+
+
 def frontier_summary(
     R: np.ndarray,
     ref: np.ndarray,
     W: np.ndarray | None = None,
     hv_samples: int = 100_000,
+    observations: np.ndarray | None = None,
 ) -> dict[str, float]:
     """Bundle the frontier metrics for a set of achieved reward vectors."""
     R = np.atleast_2d(np.asarray(R, dtype=float))
@@ -106,6 +155,11 @@ def frontier_summary(
         for j, c in enumerate(ctrl):
             out[f"controllability_obj{j}"] = float(c)
         out["controllability_mean"] = float(ctrl.mean())
+        if observations is not None:
+            steer = steerability(W, observations)
+            for j, s in enumerate(steer):
+                out[f"steerability_obj{j}"] = float(s)
+            out["steerability_mean"] = float(np.abs(steer).mean())
     return out
 
 
