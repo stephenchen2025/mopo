@@ -160,3 +160,57 @@ def test_baselines_run_and_are_zero_mean():
         a = fn(R, W)
         assert a.shape == (8,)
         assert a.mean() == pytest.approx(0.0, abs=1e-9)
+
+
+def test_alignment_term_is_zero_for_a_collapsed_policy():
+    """The property the term exists for.
+
+    A policy that ignores its conditioning emits the same behaviour at every direction, so
+    every row of S is identical. Double-centering then gives exactly zero: collapse earns
+    nothing. This matters because hypervolume *rewards* collapse once the policy can move
+    the frontier outward (results/HEADROOM_RESULTS.md), so the advantage must not.
+    """
+    W = np.array([[1.0, 0.0], [0.75, 0.25], [0.5, 0.5], [0.25, 0.75], [0.0, 1.0]])
+    collapsed = np.tile([0.5, 0.5], (5, 1))
+    np.testing.assert_allclose(pace_advantages(collapsed, W).align_advantage, 0.0, atol=1e-12)
+
+
+def test_alignment_term_rewards_matching_and_penalizes_anti_matching():
+    W = np.array([[1.0, 0.0], [0.75, 0.25], [0.5, 0.5], [0.25, 0.75], [0.0, 1.0]])
+    matched = W.copy()  # rollout k is exactly what direction k asks for
+    align_matched = pace_advantages(matched, W).align_advantage
+    align_anti = pace_advantages(matched[::-1], W).align_advantage
+
+    assert align_matched[0] > 0 and align_matched[-1] > 0
+    assert align_anti[0] < 0 and align_anti[-1] < 0
+    assert align_matched.sum() > align_anti.sum()
+
+
+def test_alignment_term_is_off_by_default_and_additive_when_on():
+    """Off by default so previously published results reproduce unchanged."""
+    R, W = _group(seed=4)
+    base = pace_advantages(R, W).advantages
+    np.testing.assert_allclose(pace_advantages(R, W, PaCEConfig(lambda_align=0.0)).advantages, base)
+    assert not np.allclose(pace_advantages(R, W, PaCEConfig(lambda_align=0.5)).advantages, base)
+
+
+def test_alignment_is_invariant_to_a_constant_shift_of_any_row_or_column():
+    """Double-centering removes exactly the main effects it is meant to remove.
+
+    Making one rollout uniformly better, or one direction uniformly easier, must not change
+    the alignment signal -- only the interaction should.
+    """
+    from pace.core.scalarization import achievement_matrix, rank_normalize
+
+    R, W = _group(seed=6)
+    S = achievement_matrix(rank_normalize(R), W)
+
+    def align(mat):
+        return np.diag(mat - mat.mean(axis=1, keepdims=True) - mat.mean(axis=0, keepdims=True) + mat.mean())
+
+    shifted_row = S.copy()
+    shifted_row[2, :] += 3.0
+    shifted_col = S.copy()
+    shifted_col[:, 1] += 3.0
+    np.testing.assert_allclose(align(shifted_row), align(S), atol=1e-9)
+    np.testing.assert_allclose(align(shifted_col), align(S), atol=1e-9)

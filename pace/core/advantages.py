@@ -46,6 +46,7 @@ class AdvantageOutput:
     achievement: np.ndarray  # (K,) diagonal of S -- own-direction achievement
     achievement_advantage: np.ndarray  # (K,) cross-direction LOO advantage
     front_advantage: np.ndarray  # (K,) dominance + crowding shaping
+    align_advantage: np.ndarray  # (K,) direction-alignment: diagonal of double-centered S
     fronts: np.ndarray  # (K,) 1-based non-dominated front index
     crowding: np.ndarray  # (K,) normalized crowding distance
     utilities: np.ndarray  # (K, m) rank-normalized rewards
@@ -94,6 +95,7 @@ def pace_advantages(
             achievement=zero.copy(),
             achievement_advantage=zero.copy(),
             front_advantage=zero.copy(),
+            align_advantage=zero.copy(),
             fronts=np.ones(1, dtype=int),
             crowding=np.ones(1),
             utilities=U,
@@ -127,7 +129,16 @@ def pace_advantages(
 
     a_front = _zscore(-fronts.astype(float), config.eps) + config.lambda_crowd * _zscore(crowd_eff, config.eps)
 
+    # Direction alignment: does the (rollout k, direction k) pairing specifically work,
+    # beyond rollout k being generally good and direction k generally easy? Double-centering
+    # strips both main effects and leaves that interaction on the diagonal. A collapsed
+    # policy -- every rollout behaving alike, so every row of S identical -- gives exactly
+    # zero here, which is the point: collapse earns nothing.
+    a_align = np.diag(S - S.mean(axis=1, keepdims=True) - S.mean(axis=0, keepdims=True) + S.mean())
+
     adv = _zscore(a_ach, config.eps) + config.lambda_front * a_front
+    if config.lambda_align:
+        adv = adv + config.lambda_align * _zscore(a_align, config.eps)
     if config.advantage_clip is not None:
         adv = np.clip(adv, -config.advantage_clip, config.advantage_clip)
 
@@ -136,6 +147,7 @@ def pace_advantages(
         achievement=own,
         achievement_advantage=a_ach,
         front_advantage=a_front,
+        align_advantage=a_align,
         fronts=fronts,
         crowding=crowd,
         utilities=U,

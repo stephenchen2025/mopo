@@ -371,6 +371,16 @@ def main() -> None:
             heterogeneous=True,
             bandit=False,
         ),
+        "pace_align": dict(
+            advantage=lambda R, W: pace_advantages(R, W, PaCEConfig(lambda_align=1.0)),
+            heterogeneous=True,
+            bandit=False,
+        ),
+        "pace_align_only": dict(
+            advantage=lambda R, W: pace_advantages(R, W, PaCEConfig(lambda_align=1.0, lambda_front=0.0)),
+            heterogeneous=True,
+            bandit=False,
+        ),
         "cond_linear": dict(advantage=linear_scalar_advantages, heterogeneous=False, bandit=False),
         "cond_mognorm": dict(advantage=mo_grpo_advantages, heterogeneous=False, bandit=False),
     }
