@@ -195,3 +195,60 @@ document's parent experiment did, 24 → 48) sharpens each of the 9 per-directio
 does not touch this floor. Only more evaluation *directions* — increasing `--eval-partitions`
 — would. This is now the more precisely targeted next step, in place of the more generic
 "more evaluation problems" recommendation given earlier.
+
+## Resolution: re-verified on real data at D=17, and it holds
+
+Both open items from the previous addenda were checked together: the corrected
+Pearson-on-means `steerability` re-run on real training data (never done before — the
+original comparison used the flawed v1 formula), and more evaluation directions
+(`--eval-partitions 16`, giving `D = 17` instead of 9) to address the small-D noise floor.
+Same models, same seeds 0-7, only the evaluation grid changed.
+
+### The two metrics now agree
+
+| | `pace_no_front` | `pace_align_only` | diff | t | p |
+|---|---|---|---|---|---|
+| controllability (Spearman) | +0.025 ± 0.134 | +0.210 ± 0.144 | +0.185 | 2.67 | **0.018** |
+| steerability (Pearson, corrected) | +0.086 ± 0.103 | +0.212 ± 0.120 | +0.126 | 2.26 | **0.041** |
+
+Both point the same direction, both are significant, and for `pace_align_only` the two
+numbers are close enough to be the same measurement (+0.210 vs +0.212). At `D = 9` with the
+broken formula these read +0.0243 and +0.0106 — not just noisy, but wrong. The prediction
+made two addenda ago — that a correctly computed steerability would most likely agree with
+Spearman rather than disagree again — held up against real data, not just simulation.
+
+### More directions tightened the estimate, confirmed on real data, even at half the seeds
+
+| controllability SD | D=9, n=16 (merged) | D=17, n=8 (fresh) |
+|---|---|---|
+| `pace_no_front` | 0.257 | **0.134** |
+| `pace_align_only` | 0.166 | 0.144 |
+
+Both dropped despite using *half* as many seeds. Spending measurement budget on more
+directions was more efficient here than spending it on more seeds — consistent with the
+theoretical floor argument, now checked against trained policies rather than only simulated
+nulls.
+
+### Why hypervolume was exactly unchanged, and that's not a coincidence
+
+`pace_no_front` and `pace_align_only` both post the identical hypervolume at D=17 as they
+did at D=9, to four decimal places, for the same seeds. This is because the tiny LM's
+conditioning channel is five discrete preference markers (`PREF_MARKERS = "VWXYZ"`) — every
+requested `w_accuracy`, however finely sampled, rounds to one of five buckets before it
+reaches the model. Both a 9-direction and a 17-direction grid query the exact same five
+underlying behaviours; the 17-direction grid just re-samples them with more independent
+draws. That is precisely why the extra directions sharpen the correlation-based metrics
+(more independent looks at the same five-point relationship) without changing the
+achievable frontier at all (there is nothing more to achieve than those five points already
+capture). A future experiment wanting finer-grained conditioning resolution than this would
+need more preference markers, not a finer evaluation grid.
+
+### Where this leaves the alignment term
+
+Hypervolume cost is established at n=16 (previous addendum, p=0.003 — and unaffected by
+today's change, per the point above). Controllability benefit is now established two ways
+at n=8/D=17 (p=0.018 and p=0.041, agreeing). **The trade is real in both directions**, not
+an artifact of an underpowered or broken measurement on either side. `lambda_align` remains
+defaulted to 0.0 pending a decision on whether that trade is worth taking for a given use
+case; the honest summary is that it is a genuine, working preference-diversity mechanism
+that costs the raw-hypervolume-maximizing behaviour it is designed to prevent.

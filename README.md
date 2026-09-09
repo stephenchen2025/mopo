@@ -102,13 +102,16 @@ this repo are not statistically supported**, and resolving a 0.10 controllabilit
 would need 104 seeds per arm (12.5 hours per contrast). The synthetic results, run at 20
 seeds with an order of magnitude less spread, are unaffected. A direction-alignment term
 built to prevent the collapse was retested at n=16 with the pairing bug fixed:
-`pace_align_only` now shows **significantly higher controllability** (p=0.019) but
+`pace_align_only` shows **significantly higher controllability** (p=0.019 at n=16) but
 **significantly lower hypervolume** (p=0.003) than `pace_no_front` -- a real trade, not
-the earlier "does not help" verdict, which was itself measured before the pairing fix.
-It still ships defaulted off pending a decision on that trade. Full story, including two
-more bugs found along the way (a broken `steerability` metric, and the discovery that any
-correlation-type controllability statistic has an intrinsic floor around 0.35-0.40 SD at
-9 evaluation directions, regardless of formula):
+the earlier "does not help" verdict from before a pairing bug was fixed. Verifying that
+trade surfaced a bug in this repo's own `steerability` metric (diluted by noisy
+objectives, then a fix that exploded under the null); the corrected version, re-run on
+real training data at more evaluation directions, **agrees with the Spearman result**
+(p=0.041) and confirms more directions -- not more evaluation problems -- is what
+shrinks a correlation-type metric's noise floor at small sample sizes. `lambda_align`
+stays defaulted off: the trade is real and measured in both directions, and taking it is
+a judgment call, not something these numbers resolve on their own. Full story:
 [ALIGNMENT_RESULTS.md](results/ALIGNMENT_RESULTS.md).
 
 **What is not established:** the cross-direction advantage matrix (ablating it moves the

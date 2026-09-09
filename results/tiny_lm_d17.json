@@ -1,0 +1,137 @@
+{
+  "config": {
+    "seeds": 8,
+    "seed_offset": 0,
+    "steps": 200,
+    "pretrain_steps": 500,
+    "n_digits": 2,
+    "methods": "pace_no_front,pace_align_only",
+    "start_floor": 0.45,
+    "start_span": 0.1,
+    "ceiling_floor": 0.15,
+    "ceiling_span": 0.7,
+    "ceiling_steps": 0,
+    "group": 8,
+    "prompts_per_step": 2,
+    "lr": 0.0001,
+    "temperature": 1.0,
+    "kl_coef": 0.02,
+    "clip_range": 0.2,
+    "max_new_tokens": 28,
+    "hidden": 256,
+    "layers": 6,
+    "partitions": 8,
+    "eval_partitions": 16,
+    "eval_problems": 48,
+    "output": "results/tiny_lm_d17.json"
+  },
+  "pretrained": {
+    "frontier": [
+      [
+        0.4375,
+        0.5636819860505163
+      ],
+      [
+        0.4375,
+        0.5636819860505163
+      ],
+      [
+        0.4375,
+        0.5636819860505163
+      ],
+      [
+        0.4583333333333333,
+        0.5831385683283924
+      ],
+      [
+        0.4583333333333333,
+        0.5831385683283924
+      ],
+      [
+        0.4583333333333333,
+        0.5831385683283924
+      ],
+      [
+        0.4791666666666667,
+        0.6237455582277494
+      ],
+      [
+        0.4791666666666667,
+        0.6237455582277494
+      ],
+      [
+        0.4791666666666667,
+        0.6237455582277494
+      ],
+      [
+        0.4791666666666667,
+        0.6237455582277494
+      ],
+      [
+        0.4791666666666667,
+        0.6237455582277494
+      ],
+      [
+        0.4791666666666667,
+        0.5738337335253556
+      ],
+      [
+        0.4791666666666667,
+        0.5738337335253556
+      ],
+      [
+        0.4791666666666667,
+        0.5738337335253556
+      ],
+      [
+        0.4791666666666667,
+        0.5636819860505163
+      ],
+      [
+        0.4791666666666667,
+        0.5636819860505163
+      ],
+      [
+        0.4791666666666667,
+        0.5636819860505163
+      ]
+    ],
+    "hypervolume": 0.2988780799841299,
+    "spacing": 0.0,
+    "max_spread": 0.0,
+    "n_nondominated": 5.0,
+    "controllability_obj0": 0.8488746876271654,
+    "controllability_obj1": 0.09185227744485648,
+    "controllability_mean": 0.47036348253601096,
+    "steerability_obj0": 0.8356290217967334,
+    "steerability_obj1": 0.0537544881881333,
+    "steerability_mean": 0.44469175499243335
+  },
+  "ceiling_hypervolume": null,
+  "methods": {
+    "pace_no_front": {
+      "hypervolume": 0.547482964163377,
+      "hypervolume_std": 0.057900001028053164,
+      "controllability_mean": 0.02464156290550709,
+      "controllability_mean_std": 0.13366825640154753,
+      "steerability_mean": 0.08588595732125942,
+      "steerability_mean_std": 0.1027260751097445,
+      "spacing": 0.0,
+      "spacing_std": 0.0,
+      "max_spread": 0.0,
+      "max_spread_std": 0.0
+    },
+    "pace_align_only": {
+      "hypervolume": 0.48361222749453847,
+      "hypervolume_std": 0.08343331516878591,
+      "controllability_mean": 0.20960727261884943,
+      "controllability_mean_std": 0.14345569601013128,
+      "steerability_mean": 0.21155082636846456,
+      "steerability_mean_std": 0.11947540140427802,
+      "spacing": 0.0,
+      "spacing_std": 0.0,
+      "max_spread": 0.010424954623178967,
+      "max_spread_std": 0.014738356903612831
+    }
+  }
+}
