@@ -103,3 +103,95 @@ says that is not affordable. Reduce the variance instead:
 
 Until then, this testbed can support qualitative claims about *whether* a policy collapses,
 and cannot support claims about which advantage estimator collapses less.
+
+## n=16 merged result (paired data, 48 eval problems): what held up
+
+`experiments/merge_results.py` combined the two paired 8-seed sweeps (seeds 0-7 and 8-15,
+`--seed-offset`) into n=16 per method. Welch's t-test on each metric:
+
+| | `pace_no_front` | `pace_align_only` | diff | t | df | p |
+|---|---|---|---|---|---|---|
+| hypervolume | 0.5679 ± 0.0606 | 0.4928 ± 0.0712 | −0.0751 | −3.21 | 29.3 | **0.003** |
+| controllability (Spearman) | +0.0243 ± 0.2568 | +0.2157 ± 0.1662 | +0.1914 | 2.50 | 25.7 | **0.019** |
+
+**Hypervolume: `pace_no_front` is significantly higher.** This is the more mechanically
+legible of the two results — the alignment term is a penalty on top of the achievement
+objective, so trading away some raw hypervolume for whatever the penalty rewards is exactly
+what adding a penalty should do. Unsurprising, but worth having measured rather than assumed.
+
+**Controllability: `pace_align_only` is significantly higher, but treat this cautiously.**
+The `pace_no_front` controllability SD nearly doubled between the two halves of this exact
+sweep — 0.1324 at n=8 (seeds 0-7) to 0.2568 at n=16 (the full seeds 0-15) — meaning the n=8
+estimate had already understated the true spread before any seeds were added. A single
+Welch test does not diagnose this by itself; it is a caution to weight this p=0.019 less
+than its face value, not a reason to discard the point estimate.
+
+## Addendum: the steerability metric itself was broken, twice, before it was fixed
+
+The n=16 merge above compared `controllability` (Spearman) against `steerability`. They
+disagreed sharply: Spearman found a significant difference favoring `pace_align_only`
+(p=0.019); the slope-based `steerability` found none (p=0.957, means 0.0108 vs 0.0106,
+essentially identical). Since `steerability` was built specifically because Spearman was
+distrusted, a disagreement between them needed resolving, not reporting as-is.
+
+It resolved against `steerability`, not against Spearman. Two things were wrong with it:
+
+1. **It diluted high-variance objectives.** Normalizing the slope by the raw observation
+   range means an objective with large per-problem noise (a 0/1 accuracy check) gets
+   divided by a large denominator that has nothing to do with steerability. Simulated: the
+   identical injected direction-dependent shift read as −0.04 for a Bernoulli-like reward
+   against +0.33 for a continuous one with the same effect — an 8x spurious gap from noise
+   character alone. Since accuracy is one of the two objectives being averaged into
+   `steerability_mean`, this alone could explain a near-zero aggregate reading.
+2. **A first attempted fix (normalizing by the range of per-direction means, or a
+   variance-decomposition debiased version of it) traded dilution for explosion.** The
+   between-direction spread is itself a noisy estimate at only 9 directions, and it can be
+   small by chance under the null. Dividing by it is unbounded: simulated under a genuine
+   null, repeated 200 times, this version returned values up to 9.28.
+
+The fix that actually works: **Pearson correlation on the per-direction means** — bounded to
+`[-1, 1]` by construction, not diluted (correlation is computed on means, each already
+averaged over every problem), and cannot explode. `pace/core/metrics.py::steerability` now
+implements this. It is verified by five tests: boundedness under 200 null trials, resistance
+to the dilution failure mode, correct behaviour on a genuinely flat (collapsed) response,
+support for pre-aggregated input, and shape validation.
+
+**One claim from earlier in this investigation is also retracted.** The original
+justification for replacing Spearman included "it returns exactly 0.0 whenever achieved
+rewards happen to be constant, which happened in 10 of 24 runs" as though this were a
+Spearman-specific artifact. Checked directly: quantized per-direction means tie often (479
+of 500 simulated trials had at least one tied mean) but scipy's average-rank tie handling
+means Spearman returns exactly 0.0 from that only rarely (4 of 500). The exactly-0.000
+values seen in real training runs were most likely genuine policy collapse — every
+direction producing a literally identical mean under deterministic greedy decoding — which
+is the *correct* reading, not a measurement artifact, and Pearson-on-means would report the
+same 0.0 in that exact case for the same reason: a constant array has no correlation with
+anything, regardless of which formula computes it.
+
+**What this means for the numbers already reported.** All `steerability_mean` values in
+this document and in `TINY_LM_RESULTS.md` used the flawed (diluted) formula and should be
+disregarded — not reinterpreted, disregarded. The `controllability` (Spearman) numbers are
+not implicated by this specific bug, though the general small-D sampling-noise caveat below
+still applies to them.
+
+**A re-measurement with the corrected metric has not yet been run.** Observations are not
+persisted from a completed sweep — recomputing a corrected metric on old data is not
+possible without retraining, since training is what produces the model whose outputs get
+evaluated. Whether Pearson-on-means agrees or disagrees with Spearman's p=0.019 finding on
+real training data is open. Simulation at realistic noise levels found the two correlate
+similarly rather than one saturating well before the other, so the base rate expectation is
+agreement rather than another reversal — but that is a prediction from synthetic data, not
+a measurement, and is reported as exactly that.
+
+## A second addendum: correlation-type controllability metrics have an intrinsic floor at D=9
+
+Independent of which correlation formula is used, repeating a genuine null 200 times at
+`D = 9` directions gives a standard error around 0.35–0.40 for *any* correlation coefficient
+computed over 9 points — this is the sampling distribution of a correlation coefficient at
+small `n`, not a property of Spearman, Pearson, or any normalization choice.
+
+This means the earlier recommendation to add more evaluation *problems* (which this
+document's parent experiment did, 24 → 48) sharpens each of the 9 per-direction means but
+does not touch this floor. Only more evaluation *directions* — increasing `--eval-partitions`
+— would. This is now the more precisely targeted next step, in place of the more generic
+"more evaluation problems" recommendation given earlier.

@@ -101,8 +101,15 @@ the method differences reported from 3-seed runs were 0.03–0.15. **The LM meth
 this repo are not statistically supported**, and resolving a 0.10 controllability difference
 would need 104 seeds per arm (12.5 hours per contrast). The synthetic results, run at 20
 seeds with an order of magnitude less spread, are unaffected. A direction-alignment term
-built to prevent the collapse was tested and **did not help** (4/8 collapses with it, 2/8
-without); it ships defaulted off.
+built to prevent the collapse was retested at n=16 with the pairing bug fixed:
+`pace_align_only` now shows **significantly higher controllability** (p=0.019) but
+**significantly lower hypervolume** (p=0.003) than `pace_no_front` -- a real trade, not
+the earlier "does not help" verdict, which was itself measured before the pairing fix.
+It still ships defaulted off pending a decision on that trade. Full story, including two
+more bugs found along the way (a broken `steerability` metric, and the discovery that any
+correlation-type controllability statistic has an intrinsic floor around 0.35-0.40 SD at
+9 evaluation directions, regardless of formula):
+[ALIGNMENT_RESULTS.md](results/ALIGNMENT_RESULTS.md).
 
 **What is not established:** the cross-direction advantage matrix (ablating it moves the
 small-LM result by 0.2 standard errors) and the coverage bandit (no benefit in three

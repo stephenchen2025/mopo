@@ -89,49 +89,77 @@ def controllability(W: np.ndarray, R: np.ndarray) -> np.ndarray:
 
 
 def steerability(W: np.ndarray, R_obs: np.ndarray) -> np.ndarray:
-    """Per-objective normalized regression slope of achieved reward on requested weight.
+    """Per-objective Pearson correlation between requested weight and per-direction mean
+    reward, computed on low-noise means rather than raw observations.
 
-    **A finer replacement for :func:`controllability`, and the reason is measurement noise.**
+    **This replaced Spearman-over-aggregates because that saturates and quantizes.** It also
+    replaced two of its own predecessors that were tried and discarded here, because both had
+    a real pathology, not just a cosmetic one -- worth recording so the mistake is not
+    repeated:
 
-    Spearman over ``D`` direction-*aggregates* has two problems that together make it unable
-    to resolve the differences it is used to compare. It sees only ``D`` points -- 9 in these
-    experiments -- so it is coarse and heavily quantized, and it returns exactly 0.0 whenever
-    achieved rewards happen to be constant, which happened in 10 of 24 runs and turns a
-    continuous quantity into a bimodal one that cannot be averaged meaningfully.
+    1. *Slope of raw observations, normalized by the raw observation range.* This dilutes
+       any high-variance objective. A 0/1 accuracy check has huge per-problem variance
+       unrelated to steerability, so normalizing by its raw range understates the effect:
+       simulated with an identical injected direction-dependent shift, a Bernoulli-like
+       reward reported -0.04 against +0.33 for a continuous one -- an 8x spurious gap from
+       noise character alone.
+    2. *Slope normalized by the range of per-direction means, or by a variance-decomposition
+       debiased estimate of it.* This fixes the dilution but creates the opposite failure:
+       under the null (no true effect), the sampled between-direction spread is itself a
+       noisy quantity that can be small by chance, and dividing by a small denominator
+       explodes. Simulated repeatedly under a genuine null with D=9: this version returned
+       values up to 9.28, i.e. not bounded at all.
 
-    This uses every ``(direction, problem)`` observation instead of the per-direction means,
-    so ``D x P`` points rather than ``D``, and reports a slope rather than a rank statistic:
+    Pearson correlation on the means avoids both. It is bounded to ``[-1, 1]`` by
+    construction, so it cannot explode under the null the way a slope-over-noisy-spread can.
+    It is not diluted by per-observation noise, because the correlation is computed on
+    per-direction *means*, each already averaged over every problem at that direction, so
+    increasing the problem count per direction directly sharpens the statistic.
 
-        slope_j = cov(w_j, r_j) / var(w_j),  divided by the observed range of r_j
+    Two things this does **not** fix, stated plainly because an earlier version of this
+    docstring overstated the case against Spearman: at realistic noise levels the two
+    correlate similarly rather than one saturating well before the other, and Spearman's
+    average-rank tie handling means quantized rewards rarely force it to exactly 0.0 purely
+    from ties (measured: 4/500 simulated trials, despite 479/500 having at least one tied
+    mean) -- so the exactly-0.000 values seen in real runs were most likely genuine policy
+    collapse, the correct reading, which Pearson reports identically. Neither statistic is
+    to blame for that; a constant array has no correlation with anything, in any flavor.
 
-    The normalization makes it comparable across objectives on different scales, and a slope
-    degrades gracefully instead of saturating. Measured per-seed SD drops accordingly -- see
-    ``results/ALIGNMENT_RESULTS.md`` for why that matters more than any single comparison.
+    **A more fundamental limit this exposed, not fixed by any normalization choice:** at
+    ``D = 9`` directions, a correlation coefficient's own sampling distribution has a
+    standard error around 0.35-0.40 (verified by simulating a true null 200 times), and this
+    holds for *any* correlation-flavored statistic computed over 9 points -- Pearson,
+    Spearman, or otherwise. More evaluation *problems* per direction sharpens each of the 9
+    means but does not touch this; only more evaluation *directions* does. Where earlier
+    documents in this repo attributed measurement noise to problem count and recommended
+    more evaluation problems, that recommendation should be read as addressing only the
+    per-mean noise, not this coarser limit.
 
     Args:
         W: ``(D, m)`` requested directions.
-        R_obs: ``(D, P, m)`` achieved rewards, per direction and per problem.
+        R_obs: achieved rewards, either ``(D, P, m)`` per-problem observations (averaged over
+            ``P`` here) or already-aggregated ``(D, m)`` per-direction means.
 
     **Higher is better; near zero means the preference knob does nothing.**
     """
     W = np.atleast_2d(np.asarray(W, dtype=float))
     R_obs = np.asarray(R_obs, dtype=float)
-    if R_obs.ndim != 3:
-        raise ValueError(f"expected (D, P, m) observations, got shape {R_obs.shape}")
-    D, P, m = R_obs.shape
+    if R_obs.ndim == 3:
+        means = R_obs.mean(axis=1)  # (D, m): average out the per-problem noise first
+    elif R_obs.ndim == 2:
+        means = R_obs
+    else:
+        raise ValueError(f"expected (D, P, m) or (D, m) observations, got shape {R_obs.shape}")
+    D, m = means.shape
     if W.shape[0] != D or W.shape[1] != m:
-        raise ValueError(f"W {W.shape} incompatible with observations {R_obs.shape}")
+        raise ValueError(f"W {W.shape} incompatible with observations of shape {R_obs.shape}")
 
     out = np.zeros(m, dtype=float)
     for j in range(m):
-        x = np.repeat(W[:, j], P)  # requested weight, one entry per observation
-        y = R_obs[:, :, j].reshape(-1)  # achieved reward for that observation
-        var = x.var()
-        if var < 1e-12:
-            continue
-        slope = float(((x - x.mean()) * (y - y.mean())).mean() / var)
-        span = float(y.max() - y.min())
-        out[j] = slope / span if span > 1e-12 else 0.0
+        x, y = W[:, j], means[:, j]
+        if x.std() < 1e-12 or y.std() < 1e-12:
+            continue  # a constant direction weight or a genuinely flat response: no signal
+        out[j] = float(np.corrcoef(x, y)[0, 1])
     return out
 
 

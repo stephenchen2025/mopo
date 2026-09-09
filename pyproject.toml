@@ -15,7 +15,7 @@ dependencies = ["numpy>=1.24"]
 llm = ["torch>=2.2", "transformers>=4.44", "peft>=0.11", "datasets>=2.19", "pyyaml>=6.0"]
 # pyyaml is a *dev* dependency, not just an llm one: tests/test_llm_rewards.py parses
 # every shipped config, which is the only part of the LLM path testable without a GPU.
-dev = ["pytest>=7.4", "black==25.1.0", "pyyaml>=6.0"]
+dev = ["pytest>=7.4", "black==25.1.0", "pyyaml>=6.0", "scipy>=1.10"]
 
 [tool.setuptools.packages.find]
 include = ["pace*"]

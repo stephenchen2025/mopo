@@ -1,0 +1,110 @@
+{
+  "config": {
+    "seeds": 8,
+    "steps": 200,
+    "pretrain_steps": 500,
+    "n_digits": 2,
+    "methods": "pace_no_front,pace_align_only",
+    "start_floor": 0.45,
+    "start_span": 0.1,
+    "ceiling_floor": 0.15,
+    "ceiling_span": 0.7,
+    "ceiling_steps": 0,
+    "group": 8,
+    "prompts_per_step": 2,
+    "lr": 0.0001,
+    "temperature": 1.0,
+    "kl_coef": 0.02,
+    "clip_range": 0.2,
+    "max_new_tokens": 28,
+    "hidden": 256,
+    "layers": 6,
+    "partitions": 8,
+    "eval_partitions": 8,
+    "eval_problems": 48,
+    "output": "results/tiny_lm_lowvar.json",
+    "merged_from": [
+      "results/tiny_lm_lowvar.json",
+      "results/tiny_lm_lowvar_ext.json"
+    ]
+  },
+  "pretrained": {
+    "frontier": [
+      [
+        0.4375,
+        0.5636819860505163
+      ],
+      [
+        0.4375,
+        0.5636819860505163
+      ],
+      [
+        0.4583333333333333,
+        0.5831385683283924
+      ],
+      [
+        0.4791666666666667,
+        0.6237455582277494
+      ],
+      [
+        0.4791666666666667,
+        0.6237455582277494
+      ],
+      [
+        0.4791666666666667,
+        0.6237455582277494
+      ],
+      [
+        0.4791666666666667,
+        0.5738337335253556
+      ],
+      [
+        0.4791666666666667,
+        0.5636819860505163
+      ],
+      [
+        0.4791666666666667,
+        0.5636819860505163
+      ]
+    ],
+    "hypervolume": 0.2988780799841299,
+    "spacing": 0.0,
+    "max_spread": 0.0,
+    "n_nondominated": 3.0,
+    "controllability_obj0": 0.8366600265340755,
+    "controllability_obj1": 0.03546634510659544,
+    "controllability_mean": 0.43606318582033543,
+    "steerability_obj0": 0.04444444444444444,
+    "steerability_obj1": 0.004754983061976735,
+    "steerability_mean": 0.024599713753210586
+  },
+  "ceiling_hypervolume": null,
+  "methods": {
+    "pace_no_front": {
+      "hypervolume": 0.567930715858914,
+      "hypervolume_std": 0.06056120686921465,
+      "controllability_mean": 0.02429599848378306,
+      "controllability_mean_std": 0.2568412850171102,
+      "steerability_mean": 0.01076388888888889,
+      "steerability_mean_std": 0.011625464613043889,
+      "spacing": 0.0023866269498187503,
+      "spacing_std": 0.007007357634286362,
+      "max_spread": 0.00651766058984475,
+      "max_spread_std": 0.0160094556043935,
+      "n_seeds": 16
+    },
+    "pace_align_only": {
+      "hypervolume": 0.49276145885918815,
+      "hypervolume_std": 0.07119835843245934,
+      "controllability_mean": 0.2156965615151187,
+      "controllability_mean_std": 0.16621152921862278,
+      "steerability_mean": 0.010588469590297335,
+      "steerability_mean_std": 0.008839014871444185,
+      "spacing": 0.00044549964065057005,
+      "spacing_std": 0.0017254126889810464,
+      "max_spread": 0.0052124773115894835,
+      "max_spread_std": 0.01165244617378562,
+      "n_seeds": 16
+    }
+  }
+}
