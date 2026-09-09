@@ -233,3 +233,28 @@ def test_steerability_validates_its_input_shape():
         steerability(W, np.zeros((3, 5, 2)))
     with pytest.raises(ValueError, match=r"expected \(D, P, m\) or \(D, m\)"):
         steerability(W, np.zeros((4,)))
+
+
+def test_correlation_noise_floor_shrinks_with_more_directions_not_more_problems():
+    """The property behind results/ALIGNMENT_RESULTS.md's D-vs-P recommendation.
+
+    A correlation coefficient's sampling variance under the null is governed by how many
+    points it is computed over (D directions), not by how precisely each point is known (P
+    problems per direction). This is what justifies recommending more evaluation directions,
+    specifically, as the fix for the measurement-noise ceiling found in this repo's
+    LM experiments -- more evaluation problems alone cannot touch it.
+    """
+    rng = np.random.default_rng(7)
+    from pace.core.metrics import steerability
+
+    def null_sd(D, trials=150):
+        w = np.linspace(0, 1, D)
+        vals = []
+        for _ in range(trials):
+            Y = rng.binomial(1, 0.5, size=(D, 48)).astype(float)
+            s = steerability(np.stack([w, 1 - w], axis=1), np.stack([Y, Y], axis=-1))[0]
+            vals.append(s)
+        return np.std(vals)
+
+    sd_9, sd_21 = null_sd(9), null_sd(21)
+    assert sd_21 < sd_9 * 0.75, f"SD at D=21 ({sd_21:.3f}) should be well below D=9 ({sd_9:.3f})"
